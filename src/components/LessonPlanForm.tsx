@@ -130,7 +130,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
   };
 
   const resetForm = () => {
-    setParams({ ...INITIAL_PARAMS, madrasah: "", namaGuru: "", babTema: "", bukuRujukan: "", catatanKhusus: "" });
+    setParams({ ...INITIAL_PARAMS, madrasah: "", namaGuru: "", babTema: "", bukuRujukan: "", catatanKhusus: "", geminiApiKey: "" });
     setFile(null);
     setFileError(null);
   };
@@ -177,7 +177,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
         </div>
 
         {/* Row 3, 4, 5: Jenjang, Fase & Kelas (Grid) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label id="lbl-jenjang" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
               Jenjang
@@ -256,7 +256,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
         </div>
 
         {/* Row 7, 8: Alokasi Waktu & Bab/Tema Utama */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label id="lbl-alokasi" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
               Alokasi Waktu
@@ -271,7 +271,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400"
             />
           </div>
-          <div className="md:col-span-2">
+          <div className="sm:col-span-2">
             <label id="lbl-babtema" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
               Bab / Tema Utama
             </label>
@@ -281,7 +281,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
               name="babTema"
               value={params.babTema}
               onChange={handleChange}
-              placeholder="Misal: Thaharah (Bersuci dari Najis)"
+              placeholder="Misal: Chapter 1: Exploring Fauna of Indonesia"
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400"
               required
             />
@@ -431,7 +431,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             name="bukuRujukan"
             value={params.bukuRujukan}
             onChange={handleChange}
-            placeholder="Misal: Buku Paket Fikih Kemenag Kelas IV, Kurikulum Merdeka"
+            placeholder="Misal: English for Nusantara Kelas IX Kemendikbud (2022)"
             className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 mb-2.5"
           />
 
@@ -514,6 +514,34 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
               </p>
             )}
           </div>
+        </div>
+
+        {/* Row 12.5: Token API Gemini */}
+        <div>
+          <label id="lbl-gemini-api-key" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+            Token API Gemini
+          </label>
+          <input
+            id="input-gemini-api-key"
+            type="password"
+            name="geminiApiKey"
+            value={params.geminiApiKey || ""}
+            onChange={handleChange}
+            placeholder="Masukkan API Key Gemini Anda..."
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 mb-1.5"
+          />
+          <p className="text-xs text-slate-500">
+            Belum memiliki Token API? Klik{" "}
+            <a
+              href="https://aistudio.google.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sky-600 hover:text-sky-700 hover:underline font-medium"
+            >
+              di sini
+            </a>{" "}
+            untuk membuat Token API Gemini Anda secara gratis.
+          </p>
         </div>
 
         {/* Row 13: Catatan Khusus */}

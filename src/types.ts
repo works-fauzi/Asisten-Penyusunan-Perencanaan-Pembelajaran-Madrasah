@@ -12,6 +12,7 @@ export interface LessonPlanParams {
   metodePembelajaran: string[];
   p2raPilihan: string[];
   pancacintaPilihan: string[];
+  geminiApiKey?: string;
 }
 
 export interface SavedLessonPlan {

@@ -68,38 +68,35 @@ export default function App() {
         formData.append("rujukanFile", file);
       }
 
-      const response = await fetch("/api/generate-lesson-plan", {
+      const baseUrl = (import.meta as any).env.VITE_API_URL || "";
+      const response = await fetch(`${baseUrl}/api/generate-lesson-plan`, {
         method: "POST",
         body: formData,
       });
 
+      const text = await response.text();
+
       if (!response.ok) {
-        let errorMessage = "Gagal menyusun rencana pembelajaran.";
+        console.error("Status:", response.status, "Body:", text);
+        let errorMessage = `API error ${response.status}: ${text.slice(0, 200)}`;
         try {
-          const contentType = response.headers.get("content-type");
-          if (contentType && contentType.includes("application/json")) {
-            const errorData = await response.json();
-            errorMessage = errorData.error || errorMessage;
-          } else {
-            const errorText = await response.text();
-            if (errorText.includes("<pre>")) {
-              const match = errorText.match(/<pre>([\s\S]*?)<\/pre>/);
-              if (match && match[1]) {
-                errorMessage = match[1].trim();
-              } else {
-                errorMessage = `Kesalahan Server (${response.status}): ${errorText.substring(0, 150)}`;
-              }
-            } else {
-              errorMessage = `Kesalahan Server (${response.status}): ${response.statusText || "Internal Server Error"}`;
+          if (text.trim().startsWith("{")) {
+            const errorJson = JSON.parse(text);
+            if (errorJson.error) {
+              errorMessage = errorJson.error;
             }
           }
-        } catch (e) {
-          errorMessage = `Kesalahan Server (${response.status})`;
-        }
+        } catch (_) {}
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        console.error("Parsing error:", err, "Body was:", text);
+        throw new Error("Gagal mengurai respon dari server sebagai JSON.");
+      }
 
       const newPlan: SavedLessonPlan = {
         id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
@@ -150,26 +147,38 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 flex flex-col text-slate-800">
       
       {/* Top Application Header */}
-      <header id="app-header" className="bg-sky-600 h-20 flex items-center justify-between px-8 text-white shrink-0 shadow-md">
+      <header id="app-header" className="bg-sky-600 h-auto py-4 px-4 sm:px-6 md:px-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-white shrink-0 shadow-md">
         <div className="flex items-center gap-3">
-          <div className="bg-white p-2 rounded-lg">
-            <Compass className="h-8 w-8 text-sky-600" />
+          <div className="bg-white p-2 rounded-lg shrink-0">
+            <Compass className="h-7 w-7 sm:h-8 sm:w-8 text-sky-600" />
           </div>
           <div className="text-left">
-            <h1 className="text-xl font-bold tracking-tight leading-none">Asisten Penyusunan Perencanaan Pembelajaran Madrasah</h1>
-            <p className="text-sky-100 text-xs mt-1">Cerdas dengan Deep Learning, Hangat dengan Kurikulum Berbasis Cinta (KBC)</p>
+            <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold tracking-tight leading-tight">Asisten Penyusunan Perencanaan Pembelajaran Madrasah</h1>
+            <p className="text-sky-100 text-[10px] sm:text-xs mt-1 leading-normal">Cerdas dengan Deep Learning, Hangat dengan Kurikulum Berbasis Cinta (KBC)</p>
           </div>
         </div>
-        <div className="flex items-center gap-4 text-xs font-medium">
-          <span className="bg-sky-500/30 px-3 py-1 rounded-full border border-sky-400 hidden sm:inline-block">Gemini AI Powered</span>
-          <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-xs font-bold uppercase">
-            AP
-          </div>
+        <div className="flex items-center gap-3 self-end md:self-auto text-xs font-medium">
+          <span className="bg-sky-500/30 px-3 py-1 rounded-full border border-sky-400 hidden sm:inline-block">Bantuan</span>
+          <a
+            href="https://wa.me/082131752220"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center p-1.5 rounded-full hover:bg-white/10 transition-colors"
+            title="Hubungi Bantuan di WhatsApp"
+          >
+            <svg
+              className="h-8 w-8 fill-current text-white hover:text-emerald-400 transition-colors"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.456 5.705 1.458h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413" />
+            </svg>
+          </a>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-8 flex flex-col gap-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex flex-col gap-6">
         
         {/* Error notification */}
         {apiError && (
@@ -269,7 +278,7 @@ export default function App() {
           </div>
           
           <div className="text-[11px] text-slate-400">
-            © 2026 Asisten Penyusunan Perencanaan Pembelajaran Madrasah. Dikembangkan untuk Guru Madrasah Indonesia Mulia.
+            © 2026 Asisten Penyusunan Perencanaan Pembelajaran Madrasah.
           </div>
         </footer>
 

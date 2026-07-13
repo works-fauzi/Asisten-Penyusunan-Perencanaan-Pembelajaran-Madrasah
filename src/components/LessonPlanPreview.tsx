@@ -28,6 +28,25 @@ export default function LessonPlanPreview({ plan, onUpdatePlan, isGenerating }: 
   const [editedMarkdown, setEditedMarkdown] = useState("");
   const [copied, setCopied] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Track loading elapsed time for cold-start warning
+  useEffect(() => {
+    let interval: any;
+    if (isGenerating) {
+      setElapsedSeconds(0);
+      interval = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setElapsedSeconds(0);
+    }
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isGenerating]);
 
   // Update editor state whenever active plan changes
   useEffect(() => {
@@ -79,12 +98,23 @@ export default function LessonPlanPreview({ plan, onUpdatePlan, isGenerating }: 
           </div>
         </div>
         <div className="space-y-2 max-w-md">
-          <h3 className="font-bold text-slate-800 text-lg">Menyusun Rencana Pembelajaran...</h3>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Kecerdasan Buatan sedang merangkai Kurikulum Merdeka, memadukan pendekatan 
-            <strong> Deep Learning (Mindful, Meaningful, Joyful)</strong> serta mengintegrasikan sentuhan humanis dari 
-            <strong> Kurikulum Berbasis Cinta (KBC)</strong>.
-          </p>
+          {elapsedSeconds > 5 ? (
+            <>
+              <h3 className="font-bold text-amber-600 text-lg animate-pulse">Membangunkan Server...</h3>
+              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                Sedang membangunkan server... Pembuatan pertama kali setelah server tidak aktif membutuhkan waktu sekitar 30-50 detik. Mohon tunggu hangatnya Kurikulum Berbasis Cinta dirumuskan...
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 className="font-bold text-slate-800 text-lg">Menyusun Rencana Pembelajaran...</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Kecerdasan Buatan sedang merangkai Kurikulum Merdeka, memadukan pendekatan 
+                <strong> Deep Learning (Mindful, Meaningful, Joyful)</strong> serta mengintegrasikan sentuhan humanis dari 
+                <strong> Kurikulum Berbasis Cinta (KBC)</strong>.
+              </p>
+            </>
+          )}
         </div>
         <div className="bg-sky-50/50 border border-sky-100 p-4 rounded-xl text-[11px] text-sky-800 text-left w-full max-w-sm space-y-1.5">
           <div className="font-semibold flex items-center gap-1.5">

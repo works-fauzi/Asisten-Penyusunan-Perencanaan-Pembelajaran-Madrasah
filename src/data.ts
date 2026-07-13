@@ -154,7 +154,7 @@ export const INITIAL_PARAMS = {
   madrasah: "",
   namaGuru: "",
   jenjang: "MI (Madrasah Ibtidaiyah)",
-  mataPelajaran: "Fikih",
+  mataPelajaran: "Bahasa Inggris",
   babTema: "",
   fase: "Fase B",
   kelas: "Kelas 3",
@@ -163,7 +163,8 @@ export const INITIAL_PARAMS = {
   catatanKhusus: "",
   metodePembelajaran: ["Diskusi Kelompok Aktif (Active Group Discussion)"],
   p2raPilihan: ["Ta'addub (Berkeadaban)", "Qudwah (Keteladanan)"],
-  pancacintaPilihan: ["Cinta kepada Allah Swt. / Sang Pencipta"]
+  pancacintaPilihan: ["Cinta kepada Allah Swt. / Sang Pencipta"],
+  geminiApiKey: ""
 };
 
 export function getMataPelajaranOptions(jenjang: string, fase: string, kelas: string): string[] {

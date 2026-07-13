@@ -7,11 +7,20 @@ import multer from "multer";
 import fs from "fs";
 import os from "os";
 import crypto from "crypto";
+import cors from "cors";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+// Configure CORS for production Vercel or external domain
+const allowedOrigin = process.env.FRONTEND_URL || '*';
+app.use(cors({
+  origin: allowedOrigin,
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // Parse incoming JSON requests with a high limit for larger text
 app.use(express.json({ limit: "10mb" }));
@@ -41,25 +50,20 @@ const upload = multer({
   },
 });
 
-// Lazy initialization helper for Gemini API to prevent module load crashes when API key is missing
-let aiInstance: GoogleGenAI | null = null;
-
-function getAiClient(): GoogleGenAI {
-  if (!aiInstance) {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("GEMINI_API_KEY environment variable is required but not configured. Silakan periksa pengaturan rahasia (Secrets) Anda.");
-    }
-    aiInstance = new GoogleGenAI({
-      apiKey: key,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
+// Initialization helper for Gemini API to get a fresh client instance every request
+function getAiClient(customKey?: string): GoogleGenAI {
+  const key = customKey || process.env.GEMINI_API_KEY;
+  if (!key) {
+    throw new Error("GEMINI_API_KEY tidak dikonfigurasi. Silakan periksa pengaturan rahasia (Secrets) Anda atau masukkan Token API Gemini Anda pada formulir.");
   }
-  return aiInstance;
+  return new GoogleGenAI({
+    apiKey: key,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
 }
 
 // Helper function to call generateContent with retry and model fallback to handle 503/429 errors gracefully
@@ -134,6 +138,7 @@ async function generateContentWithFallbackAndRetry(
 app.post("/api/generate-lesson-plan", upload.single("rujukanFile"), async (req, res) => {
   let tempFilePath = "";
   let uploadedFile: any = null;
+  let geminiApiKeyFromClient = "";
 
   try {
     const {
@@ -149,11 +154,20 @@ app.post("/api/generate-lesson-plan", upload.single("rujukanFile"), async (req, 
       catatanKhusus,
       metodePembelajaran,
       p2raPilihan,
-      pancacintaPilihan
+      pancacintaPilihan,
+      geminiApiKey
     } = req.body;
 
+    if (geminiApiKey) {
+      geminiApiKeyFromClient = geminiApiKey;
+    }
+
     if (!mataPelajaran || !babTema || !fase || !kelas) {
-      return res.status(400).json({ error: "Kolom Mata Pelajaran, Bab/Tema Utama, Fase, dan Kelas wajib diisi." });
+      return res.status(400).json({
+        status: "error",
+        error: "Kolom Mata Pelajaran, Bab/Tema Utama, Fase, dan Kelas wajib diisi.",
+        detail: "Kolom Mata Pelajaran, Bab/Tema Utama, Fase, dan Kelas wajib diisi."
+      });
     }
 
     // Process metodePembelajaran array/string
@@ -197,7 +211,7 @@ app.post("/api/generate-lesson-plan", upload.single("rujukanFile"), async (req, 
       fs.writeFileSync(tempFilePath, req.file.buffer);
 
       // Upload file to Gemini Files API
-      uploadedFile = await getAiClient().files.upload({
+      uploadedFile = await getAiClient(geminiApiKeyFromClient).files.upload({
         file: tempFilePath,
         config: {
           mimeType: req.file.mimetype || (fileExt === ".pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
@@ -400,7 +414,7 @@ Tulis dalam Bahasa Indonesia yang baku, indah, akademis, humanis, menyentuh hati
       contents.push({ text: userPrompt });
     }
 
-    const response = await generateContentWithFallbackAndRetry(getAiClient(), {
+    const response = await generateContentWithFallbackAndRetry(getAiClient(geminiApiKeyFromClient), {
       contents: contents,
       config: {
         systemInstruction: systemInstruction,
@@ -409,26 +423,38 @@ Tulis dalam Bahasa Indonesia yang baku, indah, akademis, humanis, menyentuh hati
     });
 
     const text = response.text;
-    res.json({ result: text });
+    if (!text) {
+      throw new Error("Gagal memperoleh hasil pembuatan rencana pembelajaran dari Gemini API.");
+    }
+    res.json({ status: "success", result: text });
   } catch (error: any) {
     console.error("Error generating lesson plan:", error);
-    res.status(500).json({ error: error.message || "Terjadi kesalahan pada server saat menghubungi Gemini API." });
+    res.status(500).json({
+      status: "error",
+      error: error.message || "Terjadi kesalahan pada server saat menghubungi Gemini API.",
+      detail: error.message || "Terjadi kesalahan pada server saat menghubungi Gemini API."
+    });
   } finally {
-    // ALWAYS clean up temporary local files
-    if (tempFilePath && fs.existsSync(tempFilePath)) {
-      try {
-        fs.unlinkSync(tempFilePath);
-      } catch (err) {
-        console.error("Failed to delete local temp file:", err);
+    try {
+      // ALWAYS clean up temporary local files
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        try {
+          fs.unlinkSync(tempFilePath);
+        } catch (err) {
+          console.error("Failed to delete local temp file:", err);
+        }
       }
-    }
-    // ALWAYS clean up uploaded Gemini Files API resources to avoid storage bloat/leaks
-    if (uploadedFile && uploadedFile.name) {
-      try {
-        await getAiClient().files.delete({ name: uploadedFile.name });
-      } catch (err) {
-        console.error("Failed to delete Gemini Files API resource:", err);
+      // ALWAYS clean up uploaded Gemini Files API resources to avoid storage bloat/leaks
+      if (uploadedFile && uploadedFile.name) {
+        try {
+          const client = getAiClient(geminiApiKeyFromClient);
+          await client.files.delete({ name: uploadedFile.name });
+        } catch (err) {
+          console.error("Failed to delete Gemini Files API resource:", err);
+        }
       }
+    } catch (cleanupError) {
+      console.error("Severe error in finally block cleanup:", cleanupError);
     }
   }
 });
