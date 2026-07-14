@@ -36,7 +36,7 @@ export function parseMarkdownToHTML(markdown: string): string {
       if (!inTable) {
         inTable = true;
         tableHeaderParsed = false;
-        html += "<table style='width: 100%; border-collapse: collapse; margin: 12px 0; border: 1.5px solid #000000;'>\n";
+        html += "<table class='dark:border-slate-600' style='width: 100%; border-collapse: collapse; margin: 12px 0; border: 1.5px solid #000000;'>\n";
       }
 
       // Check if it is a separator line e.g., |---|---|
@@ -60,7 +60,7 @@ export function parseMarkdownToHTML(markdown: string): string {
         cellText = cellText.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
         cellText = cellText.replace(/\*(.*?)\*/g, "<i>$1</i>");
         
-        html += `  <${tag} style="${style}">${cellText}</${tag}>\n`;
+        html += `  <${tag} class="${isHeader ? 'dark:text-white dark:bg-slate-800/80 dark:border-slate-600' : 'dark:text-slate-300 dark:border-slate-600'}" style="${style}">${cellText}</${tag}>\n`;
       }
       html += "</tr>\n";
       
@@ -91,7 +91,7 @@ export function parseMarkdownToHTML(markdown: string): string {
       formattedQuote = formattedQuote.replace(/\*(.*?)\*/g, "<i>$1</i>");
 
       // Professional italicized left-bordered indent without colored box
-      html += `<div style="margin-left: 20px; padding-left: 10px; border-left: 2.5px solid #000000; font-style: italic; color: #000000; font-size: 11pt; font-family: 'Times New Roman', Times, serif; margin-top: 6px; margin-bottom: 6px; text-align: justify;">
+      html += `<div class="dark:text-slate-200 dark:border-sky-400" style="margin-left: 20px; padding-left: 10px; border-left: 2.5px solid #000000; font-style: italic; color: #000000; font-size: 11pt; font-family: 'Times New Roman', Times, serif; margin-top: 6px; margin-bottom: 6px; text-align: justify;">
         ${formattedQuote}
       </div>\n`;
       continue;
@@ -140,7 +140,7 @@ export function parseMarkdownToHTML(markdown: string): string {
       itemText = itemText.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
       itemText = itemText.replace(/\*(.*?)\*/g, "<i>$1</i>");
 
-      html += `  <li style="font-size: 11pt; line-height: 1.5; color: #000000; font-family: 'Times New Roman', Times, serif; margin-bottom: 3px; text-align: justify;">${itemText}</li>\n`;
+      html += `  <li class="dark:text-slate-200" style="font-size: 11pt; line-height: 1.5; color: #000000; font-family: 'Times New Roman', Times, serif; margin-bottom: 3px; text-align: justify;">${itemText}</li>\n`;
       continue;
     } else {
       // Close all lists if we hit a non-list item
@@ -154,17 +154,17 @@ export function parseMarkdownToHTML(markdown: string): string {
     // 4. Handle Headers
     if (line.startsWith("###")) {
       const text = line.replace(/^###\s*/, "");
-      html += `<h3 style="color: #000000; font-size: 11pt; margin-top: 12px; margin-bottom: 4px; font-weight: bold; font-family: 'Times New Roman', Times, serif;">${text}</h3>\n`;
+      html += `<h3 class="dark:text-white" style="color: #000000; font-size: 11pt; margin-top: 12px; margin-bottom: 4px; font-weight: bold; font-family: 'Times New Roman', Times, serif;">${text}</h3>\n`;
       continue;
     }
     if (line.startsWith("##")) {
       const text = line.replace(/^##\s*/, "");
-      html += `<h2 style="color: #000000; font-size: 12pt; margin-top: 16px; margin-bottom: 6px; font-weight: bold; font-family: 'Times New Roman', Times, serif; text-transform: uppercase;">${text}</h2>\n`;
+      html += `<h2 class="dark:text-white" style="color: #000000; font-size: 12pt; margin-top: 16px; margin-bottom: 6px; font-weight: bold; font-family: 'Times New Roman', Times, serif; text-transform: uppercase;">${text}</h2>\n`;
       continue;
     }
     if (line.startsWith("#")) {
       const text = line.replace(/^#\s*/, "");
-      html += `<h1 style="color: #000000; font-size: 14pt; margin-top: 10px; margin-bottom: 15px; font-weight: bold; text-align: center; font-family: 'Times New Roman', Times, serif; text-transform: uppercase;">${text}</h1>\n`;
+      html += `<h1 class="dark:text-white" style="color: #000000; font-size: 14pt; margin-top: 10px; margin-bottom: 15px; font-weight: bold; text-align: center; font-family: 'Times New Roman', Times, serif; text-transform: uppercase;">${text}</h1>\n`;
       continue;
     }
 
@@ -179,7 +179,7 @@ export function parseMarkdownToHTML(markdown: string): string {
     paraText = paraText.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
     paraText = paraText.replace(/\*(.*?)\*/g, "<i>$1</i>");
 
-    html += `<p style="font-size: 11pt; line-height: 1.5; color: #000000; margin-top: 4px; margin-bottom: 4px; text-align: justify; font-family: 'Times New Roman', Times, serif;">${paraText}</p>\n`;
+    html += `<p class="dark:text-slate-200" style="font-size: 11pt; line-height: 1.5; color: #000000; margin-top: 4px; margin-bottom: 4px; text-align: justify; font-family: 'Times New Roman', Times, serif;">${paraText}</p>\n`;
   }
 
   // Close any unclosed tags at the end of content

@@ -43,9 +43,9 @@ const upload = multer({
 
 // Initialization helper for Gemini API to get a fresh client instance every request
 function getAiClient(customKey?: string): GoogleGenAI {
-  const key = customKey || process.env.GEMINI_API_KEY;
+  const key = customKey ? customKey.trim() : "";
   if (!key) {
-    throw new Error("GEMINI_API_KEY tidak dikonfigurasi. Silakan periksa pengaturan rahasia (Secrets) Anda atau masukkan Token API Gemini Anda pada formulir.");
+    throw new Error("Token API Gemini tidak diisi atau kosong! Pembuatan perencanaan pembelajaran dihentikan demi keamanan API Key sistem.");
   }
   return new GoogleGenAI({
     apiKey: key,

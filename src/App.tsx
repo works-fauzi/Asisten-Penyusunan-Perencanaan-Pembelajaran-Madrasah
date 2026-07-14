@@ -13,7 +13,9 @@ import {
   BookOpen,
   Info,
   Layers,
-  AlertCircle
+  AlertCircle,
+  Sun,
+  Moon
 } from "lucide-react";
 
 export default function App() {
@@ -21,6 +23,34 @@ export default function App() {
   const [activePlan, setActivePlan] = useState<SavedLessonPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try {
+      const stored = localStorage.getItem("theme");
+      if (stored === "dark" || stored === "light") {
+        return stored as "light" | "dark";
+      }
+      if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        return "dark";
+      }
+    } catch (_) {}
+    return "light";
+  });
+
+  // Sync theme to document element and localStorage
+  useEffect(() => {
+    try {
+      if (theme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+      localStorage.setItem("theme", theme);
+    } catch (_) {}
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === "light" ? "dark" : "light"));
+  };
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -158,26 +188,38 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col text-slate-800">
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200 flex flex-col">
       
       {/* Top Application Header */}
-      <header id="app-header" className="bg-sky-600 h-auto py-4 px-4 sm:px-6 md:px-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-white shrink-0 shadow-md">
+      <header id="app-header" className="bg-gradient-to-r from-teal-500 via-teal-600 to-emerald-600 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 h-auto py-4 px-4 sm:px-6 md:px-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-white shrink-0 shadow-md">
         <div className="flex items-center gap-3">
           <div className="bg-white p-2 rounded-lg shrink-0">
-            <Compass className="h-7 w-7 sm:h-8 sm:w-8 text-sky-600" />
+            <Compass className="h-7 w-7 sm:h-8 sm:w-8 text-teal-600" />
           </div>
           <div className="text-left">
-            <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold tracking-tight leading-tight">Asisten Penyusunan Perencanaan Pembelajaran Madrasah</h1>
-            <p className="text-sky-100 text-[10px] sm:text-xs mt-1 leading-normal">Cerdas dengan Deep Learning, Hangat dengan Kurikulum Berbasis Cinta (KBC)</p>
+            <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-extrabold tracking-tight text-white leading-tight">Asisten Penyusunan Perencanaan Pembelajaran Madrasah</h1>
+            <p className="text-[10px] sm:text-xs mt-1 leading-normal font-light tracking-wide text-amber-50/90 dark:text-blue-200/80">Cerdas dengan Deep Learning, Hangat dengan Kurikulum Berbasis Cinta (KBC)</p>
           </div>
         </div>
         <div className="flex items-center gap-3 self-end md:self-auto text-xs font-medium">
-          <span className="bg-sky-500/30 px-3 py-1 rounded-full border border-sky-400 hidden sm:inline-block">Bantuan</span>
+          <button
+            onClick={toggleTheme}
+            className="bg-white/15 hover:bg-white/25 border border-white/20 text-white p-2 rounded-full backdrop-blur-sm transition-all duration-200 flex items-center justify-center cursor-pointer"
+            title={theme === "dark" ? "Aktifkan Mode Terang" : "Aktifkan Mode Gelap"}
+            aria-label="Toggle theme"
+          >
+            {theme === "dark" ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
+          </button>
+          <span className="bg-white/15 hover:bg-white/25 border border-white/20 text-white text-sm font-medium px-4 py-1.5 rounded-full backdrop-blur-sm transition-all duration-200 hidden sm:inline-block">Bantuan</span>
           <a
             href="https://wa.me/082131752220"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center p-1.5 rounded-full hover:bg-white/10 transition-colors"
+            className="flex items-center justify-center p-1.5 rounded-full hover:bg-white/10 hover:scale-105 transition-transform duration-200"
             title="Hubungi Bantuan di WhatsApp"
           >
             <svg
@@ -267,33 +309,33 @@ export default function App() {
 
             {/* Indicator panels from Vibrant Palette */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 shrink-0 text-left">
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 flex items-center gap-3 shadow-xs">
-                <div className="bg-rose-100 p-2.5 rounded-full text-rose-500">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
+                <div className="bg-rose-100 dark:bg-rose-950/40 p-2.5 rounded-full text-rose-500 shrink-0">
                   <Heart className="w-5 h-5 fill-rose-500" />
                 </div>
                 <div className="leading-none">
-                  <p className="text-[10px] uppercase text-slate-400 font-bold tracking-widest mb-1">Love Index</p>
-                  <p className="text-sm font-bold text-slate-700">Sangat Tinggi</p>
+                  <p className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold tracking-widest mb-1">Love Index</p>
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Sangat Tinggi</p>
                 </div>
               </div>
 
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 flex items-center gap-3 shadow-xs">
-                <div className="bg-amber-100 p-2.5 rounded-full text-amber-500">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
+                <div className="bg-amber-100 dark:bg-amber-950/40 p-2.5 rounded-full text-amber-500 shrink-0">
                   <Compass className="w-5 h-5" />
                 </div>
                 <div className="leading-none">
-                  <p className="text-[10px] uppercase text-slate-400 font-bold tracking-widest mb-1">Diferensiasi</p>
-                  <p className="text-sm font-bold text-slate-700">Aktif (AI Adjusted)</p>
+                  <p className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold tracking-widest mb-1">Diferensiasi</p>
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Aktif (AI Adjusted)</p>
                 </div>
               </div>
 
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 flex items-center gap-3 shadow-xs">
-                <div className="bg-sky-100 p-2.5 rounded-full text-sky-500">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
+                <div className="bg-sky-100 dark:bg-sky-950/40 p-2.5 rounded-full text-sky-500 shrink-0">
                   <FileText className="w-5 h-5" />
                 </div>
                 <div className="leading-none">
-                  <p className="text-[10px] uppercase text-slate-400 font-bold tracking-widest mb-1">Status Perencanaan</p>
-                  <p className="text-sm font-bold text-slate-700">
+                  <p className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold tracking-widest mb-1">Status Perencanaan</p>
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
                     {activePlan ? "Siap Diekspor" : "Isi Parameter"}
                   </p>
                 </div>
@@ -312,29 +354,29 @@ export default function App() {
         </div>
 
         {/* Footer info explaining the synergy of the curriculum */}
-        <footer className="mt-12 pt-6 border-t border-slate-200/60 text-center space-y-4 max-w-3xl mx-auto">
+        <footer className="mt-12 pt-6 border-t border-slate-200/60 dark:border-slate-800 text-center space-y-4 max-w-3xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-            <div className="p-4 bg-white border border-slate-100 rounded-xl shadow-xs">
-              <span className="text-xs font-bold text-blue-600 uppercase tracking-widest block mb-1">Kurikulum Merdeka</span>
-              <p className="text-[10.5px] text-slate-500 leading-normal">
+            <div className="p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-xs transition-colors duration-200">
+              <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-1">Kurikulum Merdeka</span>
+              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-normal">
                 Fleksibilitas konten pembelajaran, berpusat pada murid, dan penguatan karakter Profil Pelajar Pancasila & Rahmatan Lil Alamin (P2RA).
               </p>
             </div>
-            <div className="p-4 bg-white border border-slate-100 rounded-xl shadow-xs">
-              <span className="text-xs font-bold text-sky-600 uppercase tracking-widest block mb-1">Deep Learning</span>
-              <p className="text-[10.5px] text-slate-500 leading-normal">
+            <div className="p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-xs transition-colors duration-200">
+              <span className="text-xs font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest block mb-1">Deep Learning</span>
+              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-normal">
                 Mendorong proses belajar tingkat tinggi dengan 3 pilar: <strong>Mindful</strong> (penuh kesadaran), <strong>Meaningful</strong> (bermakna), dan <strong>Joyful</strong> (menyenangkan).
               </p>
             </div>
-            <div className="p-4 bg-white border border-slate-100 rounded-xl shadow-xs">
-              <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest block mb-1">Berbasis Cinta</span>
-              <p className="text-[10.5px] text-slate-500 leading-normal">
+            <div className="p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-xs transition-colors duration-200">
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block mb-1">Berbasis Cinta</span>
+              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-normal">
                 Mengutamakan iklim kelas yang aman (safe space), restitusi humanis, serta bimbingan bernuansa kasih sayang dari lubuk hati pendidik.
               </p>
             </div>
           </div>
           
-          <div className="text-[11px] text-slate-400">
+          <div className="text-[11px] text-slate-400 dark:text-slate-500">
             © 2026 Asisten Penyusunan Perencanaan Pembelajaran Madrasah.
           </div>
         </footer>

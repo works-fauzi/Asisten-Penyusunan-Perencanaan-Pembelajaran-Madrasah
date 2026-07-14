@@ -7,6 +7,8 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+@variant dark (&:where(.dark, .dark *));
+
 /* Custom smooth scrolling and custom focus styles */
 html {
   scroll-behavior: smooth;
@@ -31,3 +33,56 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Dark Mode Overrides for Parsed Lesson Plan Preview */
+.dark .markdown-body,
+.dark #print-sheet {
+  color: #f8fafc !important; /* slate-100 */
+}
+
+.dark .markdown-body h1,
+.dark .markdown-body h2,
+.dark .markdown-body h3,
+.dark .markdown-body h4,
+.dark .markdown-body h5,
+.dark .markdown-body h6,
+.dark #print-sheet h1,
+.dark #print-sheet h2,
+.dark #print-sheet h3,
+.dark #print-sheet h4 {
+  color: #ffffff !important;
+}
+
+.dark .markdown-body p,
+.dark .markdown-body li,
+.dark .markdown-body span,
+.dark #print-sheet p,
+.dark #print-sheet li,
+.dark #print-sheet span {
+  color: #e2e8f0 !important; /* slate-200 */
+}
+
+.dark .markdown-body table,
+.dark #print-sheet table {
+  border-color: #475569 !important; /* slate-600 */
+}
+
+.dark .markdown-body th,
+.dark #print-sheet th {
+  background-color: #1e293b !important; /* slate-800 */
+  border-color: #475569 !important;
+  color: #ffffff !important;
+}
+
+.dark .markdown-body td,
+.dark #print-sheet td {
+  border-color: #475569 !important;
+  color: #cbd5e1 !important; /* slate-300 */
+}
+
+.dark .markdown-body div[style*="border-left"],
+.dark #print-sheet div[style*="border-left"] {
+  border-left-color: #38bdf8 !important; /* sky-400 */
+  color: #e2e8f0 !important; /* slate-200 */
+}
+

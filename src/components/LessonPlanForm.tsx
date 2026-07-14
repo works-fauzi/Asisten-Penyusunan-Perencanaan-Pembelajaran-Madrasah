@@ -136,17 +136,17 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col text-left">
+    <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col text-left transition-colors duration-200">
       {/* Dynamic Theme Header */}
-      <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4 shrink-0">
+      <div className="flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-slate-700 pb-4 shrink-0">
         <div className="w-1.5 h-6 bg-sky-500 rounded-full"></div>
-        <h2 className="text-lg font-bold text-slate-800">Formulir Perencanaan</h2>
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">Formulir Perencanaan</h2>
       </div>
 
       <div className="space-y-4">
         {/* Row 1: Nama Madrasah */}
         <div>
-          <label id="lbl-madrasah" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+          <label id="lbl-madrasah" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
             Nama Madrasah
           </label>
           <input
@@ -156,13 +156,13 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             value={params.madrasah}
             onChange={handleChange}
             placeholder="Contoh: MTs Al-Iman 02 Bulus"
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400"
+            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
           />
         </div>
 
         {/* Row 2: Nama Guru */}
         <div>
-          <label id="lbl-guru" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+          <label id="lbl-guru" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
             Nama Guru
           </label>
           <input
@@ -172,14 +172,14 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             value={params.namaGuru}
             onChange={handleChange}
             placeholder="Contoh: Achmad Fauzi, S.S."
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400"
+            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
           />
         </div>
 
         {/* Row 3, 4, 5: Jenjang, Fase & Kelas (Grid) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label id="lbl-jenjang" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+            <label id="lbl-jenjang" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
               Jenjang
             </label>
             <select
@@ -187,7 +187,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
               name="jenjang"
               value={params.jenjang}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer text-slate-900 dark:text-slate-100 dark:[&>option]:bg-slate-800"
             >
               {JENJANG_OPTIONS.map((opt, idx) => (
                 <option key={idx} value={opt}>{opt}</option>
@@ -195,9 +195,9 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             </select>
           </div>
           <div>
-            <label id="lbl-fase" className="block text-xs font-semibold text-slate-600 uppercase mb-1 flex items-center justify-between">
+            <label id="lbl-fase" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1 flex items-center justify-between">
               Fase
-              <span className="text-[10px] text-sky-600 lowercase bg-sky-50 px-1.5 py-0.5 rounded font-normal">
+              <span className="text-[10px] text-sky-600 dark:text-sky-400 lowercase bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 rounded font-normal">
                 auto-fase
               </span>
             </label>
@@ -206,7 +206,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
               name="fase"
               value={params.fase}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer text-slate-900 dark:text-slate-100 dark:[&>option]:bg-slate-800"
             >
               {FASE_OPTIONS.map((opt, idx) => (
                 <option key={idx} value={opt.value}>{opt.label}</option>
@@ -214,9 +214,9 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             </select>
           </div>
           <div>
-            <label id="lbl-kelas" className="block text-xs font-semibold text-slate-600 uppercase mb-1 flex items-center justify-between">
+            <label id="lbl-kelas" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1 flex items-center justify-between">
               Kelas
-              <span className="text-[10px] text-amber-600 lowercase bg-amber-50 px-1.5 py-0.5 rounded font-normal">
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 lowercase bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded font-normal">
                 auto-kelas
               </span>
             </label>
@@ -225,7 +225,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
               name="kelas"
               value={params.kelas}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all cursor-pointer"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all cursor-pointer text-slate-900 dark:text-slate-100 dark:[&>option]:bg-slate-800"
             >
               {(FASE_TO_KELAS_MAP[params.fase] || KELAS_OPTIONS).map((opt, idx) => (
                 <option key={idx} value={opt}>{opt}</option>
@@ -236,7 +236,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
 
         {/* Row 6: Mata Pelajaran */}
         <div>
-          <label id="lbl-mapel" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+          <label id="lbl-mapel" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
             Mata Pelajaran
           </label>
           <select
@@ -244,7 +244,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             name="mataPelajaran"
             value={params.mataPelajaran}
             onChange={handleChange}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer"
+            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer text-slate-900 dark:text-slate-100 dark:[&>option]:bg-slate-800"
             required
           >
             {getMataPelajaranOptions(params.jenjang, params.fase, params.kelas).map((subj, idx) => (
@@ -258,7 +258,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
         {/* Row 7, 8: Alokasi Waktu & Bab/Tema Utama */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label id="lbl-alokasi" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+            <label id="lbl-alokasi" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
               Alokasi Waktu
             </label>
             <input
@@ -268,11 +268,11 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
               value={params.alokasiWaktu}
               onChange={handleChange}
               placeholder="Contoh: 2 x 35 menit"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
             />
           </div>
           <div className="sm:col-span-2">
-            <label id="lbl-babtema" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+            <label id="lbl-babtema" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
               Bab / Tema Utama
             </label>
             <input
@@ -281,8 +281,8 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
               name="babTema"
               value={params.babTema}
               onChange={handleChange}
-              placeholder="Misal: Chapter 1: Exploring Fauna of Indonesia"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400"
+              placeholder="Contoh: Chapter 1: Exploring Fauna of Indonesia"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
               required
             />
           </div>
@@ -290,10 +290,10 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
 
         {/* Row 9: Fokus KBC Pancacinta */}
         <div>
-          <label id="lbl-pancacinta" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+          <label id="lbl-pancacinta" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
             Fokus KBC Pancacinta (Pilih satu atau lebih)
           </label>
-          <div className="flex flex-wrap gap-2 mt-1.5 p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <div className="flex flex-wrap gap-2 mt-1.5 p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700">
             {PANCACINTA_PRESETS.map((p, idx) => {
               const isSelected = params.pancacintaPilihan?.includes(p);
               return (
@@ -302,14 +302,14 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
                   type="button"
                   id={`btn-pancacinta-${idx}`}
                   onClick={() => handleTogglePancacinta(p)}
-                  className={`text-xs px-3 py-2 rounded-lg border font-medium transition-all duration-200 text-left flex items-center gap-2 ${
+                  className={`text-xs px-3 py-2 rounded-lg border font-medium transition-all duration-200 text-left flex items-center gap-2 cursor-pointer ${
                     isSelected
                       ? "bg-rose-600 border-rose-600 text-white shadow-sm shadow-rose-500/15"
-                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-rose-200"
+                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:border-rose-200 dark:hover:border-rose-900"
                   }`}
                 >
-                  <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center text-[10px] transition-all ${
-                    isSelected ? "bg-white border-white text-rose-600" : "bg-slate-50 border-slate-200 text-transparent"
+                  <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center text-[10px] transition-all shrink-0 ${
+                    isSelected ? "bg-white border-white text-rose-600" : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-transparent"
                   }`}>
                     ✓
                   </span>
@@ -319,7 +319,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             })}
           </div>
           {(!params.pancacintaPilihan || params.pancacintaPilihan.length === 0) && (
-            <p className="text-[11px] text-amber-600 font-medium mt-1.5 flex items-center gap-1">
+            <p className="text-[11px] text-amber-600 dark:text-amber-500 font-medium mt-1.5 flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5" /> Harap pilih minimal satu pilar Pancacinta.
             </p>
           )}
@@ -327,10 +327,10 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
 
         {/* Row 10: Fokus Karakter Rahmatan Lil Alamin (P2RA) */}
         <div>
-          <label id="lbl-p2ra" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+          <label id="lbl-p2ra" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
             Fokus Karakter Rahmatan Lil Alamin (P2RA) (Pilih satu atau lebih)
           </label>
-          <div className="flex flex-wrap gap-2 mt-1.5 p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <div className="flex flex-wrap gap-2 mt-1.5 p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700">
             {P2RA_VALUES.map((val, idx) => {
               const isSelected = params.p2raPilihan?.includes(val.name);
               return (
@@ -339,14 +339,14 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
                   type="button"
                   id={`btn-p2ra-${idx}`}
                   onClick={() => handleToggleP2RA(val.name)}
-                  className={`text-xs px-3 py-2 rounded-lg border font-medium transition-all duration-200 text-left flex items-center gap-2 ${
+                  className={`text-xs px-3 py-2 rounded-lg border font-medium transition-all duration-200 text-left flex items-center gap-2 cursor-pointer ${
                     isSelected
                       ? "bg-emerald-600 border-emerald-600 text-white shadow-sm shadow-emerald-500/15"
-                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300"
+                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
                   }`}
                 >
-                  <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center text-[10px] transition-all ${
-                    isSelected ? "bg-white border-white text-emerald-600" : "bg-slate-50 border-slate-200 text-transparent"
+                  <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center text-[10px] transition-all shrink-0 ${
+                    isSelected ? "bg-white border-white text-emerald-600" : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-transparent"
                   }`}>
                     ✓
                   </span>
@@ -356,7 +356,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             })}
           </div>
           {(!params.p2raPilihan || params.p2raPilihan.length === 0) && (
-            <p className="text-[11px] text-amber-600 font-medium mt-1.5 flex items-center gap-1">
+            <p className="text-[11px] text-amber-600 dark:text-amber-500 font-medium mt-1.5 flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5" /> Harap pilih minimal satu pilar P2RA.
             </p>
           )}
@@ -366,14 +366,14 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             const selectedVals = P2RA_VALUES.filter(v => params.p2raPilihan?.includes(v.name));
             if (selectedVals.length === 0) return null;
             return (
-              <div className="mt-2.5 p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 border-b border-emerald-200/50 pb-1.5">
-                  <Compass className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div className="mt-2.5 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 border-b border-emerald-200/50 dark:border-emerald-900/40 pb-1.5">
+                  <Compass className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>Definisi P2RA yang Terpilih:</span>
                 </div>
                 <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                   {selectedVals.map((val, idx) => (
-                    <div key={idx} className="text-[11px] text-emerald-800 leading-normal">
+                    <div key={idx} className="text-[11px] text-emerald-800 dark:text-emerald-300 leading-normal">
                       <strong>{val.name}:</strong> {val.desc}
                     </div>
                   ))}
@@ -385,10 +385,10 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
 
         {/* Row 11: Metode Pembelajaran Utama */}
         <div>
-          <label id="lbl-metode" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+          <label id="lbl-metode" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
             Metode Pembelajaran Utama (Pilih satu atau lebih)
           </label>
-          <div className="flex flex-wrap gap-2 mt-1.5 p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <div className="flex flex-wrap gap-2 mt-1.5 p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700">
             {METODE_PEMBELAJARAN_PRESETS.map((m, idx) => {
               const isSelected = params.metodePembelajaran.includes(m);
               return (
@@ -397,14 +397,14 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
                   type="button"
                   id={`btn-metode-${idx}`}
                   onClick={() => handleToggleMethod(m)}
-                  className={`text-xs px-3 py-2 rounded-lg border font-medium transition-all duration-200 text-left flex items-center gap-2 ${
+                  className={`text-xs px-3 py-2 rounded-lg border font-medium transition-all duration-200 text-left flex items-center gap-2 cursor-pointer ${
                     isSelected
                       ? "bg-sky-600 border-sky-600 text-white shadow-sm shadow-sky-500/15"
-                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300"
+                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
                   }`}
                 >
-                  <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center text-[10px] transition-all ${
-                    isSelected ? "bg-white border-white text-sky-600" : "bg-slate-50 border-slate-200 text-transparent"
+                  <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center text-[10px] transition-all shrink-0 ${
+                    isSelected ? "bg-white border-white text-sky-600" : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-transparent"
                   }`}>
                     ✓
                   </span>
@@ -414,7 +414,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             })}
           </div>
           {params.metodePembelajaran.length === 0 && (
-            <p className="text-[11px] text-amber-600 font-medium mt-1.5 flex items-center gap-1">
+            <p className="text-[11px] text-amber-600 dark:text-amber-500 font-medium mt-1.5 flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5" /> Harap pilih minimal satu metode pembelajaran.
             </p>
           )}
@@ -422,7 +422,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
 
         {/* Row 12: Buku Rujukan Utama */}
         <div>
-          <label id="lbl-rujukan" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+          <label id="lbl-rujukan" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
             Buku Rujukan Utama
           </label>
           <input
@@ -431,18 +431,18 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             name="bukuRujukan"
             value={params.bukuRujukan}
             onChange={handleChange}
-            placeholder="Misal: English for Nusantara Kelas IX Kemendikbud (2022)"
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 mb-2.5"
+            placeholder="Contoh: English for Nusantara Kelas IX Kemendikbud (2022)"
+            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100 mb-2.5"
           />
 
           {/* Combined drag-and-drop file upload */}
           <div
             className={`border-2 border-dashed rounded-xl p-4 text-center transition-all ${
               isDragOver
-                ? "border-sky-500 bg-sky-50/50"
+                ? "border-sky-500 bg-sky-50/50 dark:bg-sky-950/20"
                 : file
-                ? "border-emerald-500 bg-emerald-50/20"
-                : "border-slate-200 hover:border-slate-300 bg-slate-50/30"
+                ? "border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/10"
+                : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/30 dark:bg-slate-900/20"
             }`}
             onDragOver={(e) => {
               e.preventDefault();
@@ -459,16 +459,16 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             }}
           >
             {file ? (
-              <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-emerald-100 shadow-xs">
+              <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-2.5 rounded-lg border border-emerald-100 dark:border-emerald-900/40 shadow-xs">
                 <div className="flex items-center gap-2 text-left">
-                  <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700">
+                  <div className="p-2 bg-emerald-100 dark:bg-emerald-950/50 rounded-lg text-emerald-700 dark:text-emerald-300">
                     <Book className="w-5 h-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-slate-700 truncate max-w-[200px] sm:max-w-[280px]">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[200px] sm:max-w-[280px]">
                       {file.name}
                     </p>
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500">
                       {(file.size / (1024 * 1024)).toFixed(2)} MB • PDF/DOCX terlampir
                     </p>
                   </div>
@@ -479,7 +479,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
                     setFile(null);
                     setFileError(null);
                   }}
-                  className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                  className="p-1 text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors shrink-0 cursor-pointer"
                   title="Hapus file"
                 >
                   <X className="w-4 h-4" />
@@ -498,57 +498,29 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
                     }
                   }}
                 />
-                <Upload className="w-6 h-6 mx-auto mb-1.5 text-slate-400" />
-                <span className="text-xs font-semibold text-sky-600 hover:text-sky-700 block mb-1">
+                <Upload className="w-6 h-6 mx-auto mb-1.5 text-slate-400 dark:text-slate-500" />
+                <span className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 block mb-1">
                   Unggah Dokumen Buku Rujukan (.pdf / .docx)
                 </span>
-                <span className="text-[10px] text-slate-400 block">
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 block">
                   Maksimal ukuran file 5 MB (Opsional)
                 </span>
               </label>
             )}
 
             {fileError && (
-              <p className="text-[10px] text-red-500 font-medium mt-1.5 flex items-center justify-center gap-1">
+              <p className="text-[10px] text-red-500 dark:text-red-400 font-medium mt-1.5 flex items-center justify-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5" /> {fileError}
               </p>
             )}
           </div>
         </div>
 
-        {/* Row 12.5: Token API Gemini */}
-        <div>
-          <label id="lbl-gemini-api-key" className="block text-xs font-semibold text-slate-600 uppercase mb-1">
-            Token API Gemini
-          </label>
-          <input
-            id="input-gemini-api-key"
-            type="password"
-            name="geminiApiKey"
-            value={params.geminiApiKey || ""}
-            onChange={handleChange}
-            placeholder="Masukkan API Key Gemini Anda..."
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 mb-1.5"
-          />
-          <p className="text-xs text-slate-500">
-            Belum memiliki Token API? Klik{" "}
-            <a
-              href="https://aistudio.google.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sky-600 hover:text-sky-700 hover:underline font-medium"
-            >
-              di sini
-            </a>{" "}
-            untuk membuat Token API Gemini Anda secara gratis.
-          </p>
-        </div>
-
         {/* Row 13: Catatan Khusus */}
         <div>
-          <label id="lbl-catatan" className="block text-xs font-semibold text-slate-600 uppercase mb-1 flex items-center gap-1">
+          <label id="lbl-catatan" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1 flex items-center gap-1">
             Catatan Khusus Belajar Kelas
-            <span className="text-[10px] text-slate-400 font-normal lowercase">(opsional)</span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal lowercase">(opsional)</span>
           </label>
           <textarea
             id="textarea-catatan"
@@ -556,27 +528,65 @@ export default function LessonPlanForm({ onSubmit, isGenerating }: LessonPlanFor
             value={params.catatanKhusus}
             onChange={handleChange}
             rows={3}
-            placeholder="Misal: Kelas sangat aktif, 3 murid membutuhkan bimbingan lambat..."
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 resize-none"
+            placeholder="Contoh: Kelas sangat aktif, 3 murid membutuhkan bimbingan lambat..."
+            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100 resize-none"
           />
         </div>
 
+        {/* Row 12.5: Token API Gemini */}
+        <div>
+          <label id="lbl-gemini-api-key" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+            Token API Gemini <span className="text-rose-500 font-bold">* (Wajib Diisi)</span>
+          </label>
+          <input
+            id="input-gemini-api-key"
+            type="password"
+            name="geminiApiKey"
+            value={params.geminiApiKey || ""}
+            onChange={handleChange}
+            required
+            placeholder="Masukkan API Key Gemini Anda..."
+            className={`w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100 mb-1.5 ${
+              !params.geminiApiKey || !params.geminiApiKey.trim()
+                ? "border-rose-300 dark:border-rose-900 focus:border-rose-500 focus:ring-rose-500/20"
+                : "border-slate-200 dark:border-slate-700 focus:border-sky-500"
+            }`}
+          />
+          {(!params.geminiApiKey || !params.geminiApiKey.trim()) && (
+            <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium mb-1.5 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" /> Token API Gemini wajib diisi untuk mengaktifkan tombol Generate.
+            </p>
+          )}
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Belum memiliki Token API? Klik{" "}
+            <a
+              href="https://aistudio.google.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline font-medium"
+            >
+              di sini
+            </a>{" "}
+            untuk membuat Token API Gemini Anda secara gratis.
+          </p>
+        </div>
+
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
           <button
             type="button"
             id="btn-form-reset"
             onClick={resetForm}
             disabled={isGenerating}
-            className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer text-slate-700 dark:text-slate-300"
           >
             Reset Form
           </button>
           <button
             type="submit"
             id="btn-form-submit"
-            disabled={isGenerating}
-            className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm select-none cursor-pointer disabled:opacity-50"
+            disabled={isGenerating || !params.geminiApiKey || !params.geminiApiKey.trim()}
+            className="flex-1 bg-sky-600 hover:bg-sky-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Sparkles className="h-5 w-5" />
             {isGenerating ? "Menganalisis Kurikulum..." : "Generate Modul AI"}
