@@ -7,20 +7,11 @@ import multer from "multer";
 import fs from "fs";
 import os from "os";
 import crypto from "crypto";
-import cors from "cors";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
-
-// Configure CORS for production Vercel or external domain
-const allowedOrigin = process.env.FRONTEND_URL || '*';
-app.use(cors({
-  origin: allowedOrigin,
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
 
 // Parse incoming JSON requests with a high limit for larger text
 app.use(express.json({ limit: "10mb" }));

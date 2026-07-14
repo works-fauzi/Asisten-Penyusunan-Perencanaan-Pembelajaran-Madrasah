@@ -68,13 +68,23 @@ export default function App() {
         formData.append("rujukanFile", file);
       }
 
-      const baseUrl = (import.meta as any).env.VITE_API_URL || "";
-      const response = await fetch(`${baseUrl}/api/generate-lesson-plan`, {
+      const response = await fetch("/api/generate-lesson-plan", {
         method: "POST",
         body: formData,
       });
 
       const text = await response.text();
+
+      // Detect Cookie check security page from AI Studio reverse proxy
+      if (
+        text.includes("Cookie check") || 
+        text.includes("Action required to load your app") || 
+        text.includes("redirectToReturnUrl") || 
+        text.trim().startsWith("<!doctype html>") || 
+        text.trim().startsWith("<!DOCTYPE html>")
+      ) {
+        throw new Error("COOKIE_CHECK_BLOCKED: Browser Anda memblokir cookie keamanan pihak ketiga (third-party cookies) dalam iframe AI Studio. Silakan buka aplikasi di tab baru.");
+      }
 
       if (!response.ok) {
         console.error("Status:", response.status, "Body:", text);
@@ -112,7 +122,11 @@ export default function App() {
       saveToLocalStorage(updatedHistory);
     } catch (error: any) {
       console.error("Error generating lesson plan:", error);
-      setApiError(error.message || "Terjadi gangguan komunikasi dengan server. Pastikan server dev aktif.");
+      let errMsg = error.message || "";
+      if (errMsg.includes("Failed to fetch") || errMsg.includes("NetworkError")) {
+        errMsg = "FAILED_TO_FETCH: Gagal menghubungi server atau koneksi diblokir oleh browser. Hal ini biasanya terjadi jika cookie keamanan diblokir atau terjadi masalah CORS.";
+      }
+      setApiError(errMsg);
     } finally {
       setIsGenerating(false);
     }
@@ -182,13 +196,56 @@ export default function App() {
         
         {/* Error notification */}
         {apiError && (
-          <div id="error-bar" className="mb-2 p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3 text-sm text-rose-800 animate-fade-in shadow-sm">
-            <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <h4 className="font-bold text-left">Gagal Menyusun Rencana Pembelajaran</h4>
-              <p className="text-xs text-rose-600 leading-relaxed text-left">{apiError}</p>
-            </div>
-          </div>
+          (() => {
+            const isCookieOrFetchError = 
+              apiError.includes("COOKIE_CHECK_BLOCKED") ||
+              apiError.includes("FAILED_TO_FETCH") ||
+              apiError.includes("Unexpected token '<'") ||
+              apiError.includes("is not valid JSON") ||
+              apiError.includes("Gagal mengurai respon");
+
+            if (isCookieOrFetchError) {
+              return (
+                <div id="error-bar" className="mb-2 p-5 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row items-start gap-4 text-sm text-slate-800 animate-fade-in shadow-sm">
+                  <div className="bg-amber-100 p-2.5 rounded-xl text-amber-600 shrink-0">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-2 flex-1 text-left">
+                    <h4 className="font-bold text-amber-950 text-base">Masalah Koneksi & Cookie Keamanan Terdeteksi</h4>
+                    <p className="text-xs text-amber-900 leading-relaxed">
+                      Aplikasi mendeteksi bahwa peramban (browser) Anda memblokir cookie keamanan pihak ketiga (third-party cookies) dalam bingkai (iframe) AI Studio. Ini adalah perilaku bawaan perlindungan privasi pada <strong>Safari iOS/macOS</strong>, <strong>Chrome Incognito / Guest Mode</strong>, atau peramban dengan proteksi ketat.
+                    </p>
+                    <div className="p-3 bg-amber-100/60 rounded-xl border border-amber-200/40 text-xs text-amber-950/90 space-y-1">
+                      <p className="font-bold">Langkah Solusi Cepat & Mudah:</p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-700">
+                        <li>Klik tombol <strong>Buka Aplikasi di Tab Baru</strong> di samping untuk menggunakan aplikasi secara penuh dan lancar tanpa kendala cookie.</li>
+                        <li>Atau, izinkan cookie pihak ketiga pada peramban Anda dan segarkan halaman ini.</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="w-full md:w-auto shrink-0 self-center">
+                    <button
+                      onClick={() => window.open(window.location.href, "_blank")}
+                      className="w-full md:w-auto px-5 py-3.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-semibold rounded-xl text-xs shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border border-amber-700"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-200" />
+                      Buka Aplikasi di Tab Baru
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div id="error-bar" className="mb-2 p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3 text-sm text-rose-800 animate-fade-in shadow-sm">
+                <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                <div className="space-y-1 text-left">
+                  <h4 className="font-bold">Gagal Menyusun Rencana Pembelajaran</h4>
+                  <p className="text-xs text-rose-600 leading-relaxed">{apiError}</p>
+                </div>
+              </div>
+            );
+          })()
         )}
 
         {/* 3-Column Bento Grid Layout for Ultimate Desktop Productivity */}
