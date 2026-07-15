@@ -71,7 +71,7 @@ export default function LessonPlanPreview({ plan, onUpdatePlan, isGenerating }: 
 
   if (isGenerating) {
     return (
-      <div id="preview-loading" className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-sm p-12 text-center h-[650px] flex flex-col items-center justify-center space-y-6 transition-colors duration-200">
+      <div id="preview-loading" className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-sm p-12 text-center flex-1 overflow-y-auto flex flex-col items-center justify-center space-y-6 transition-colors duration-200">
         <div className="relative">
           <div className="w-16 h-16 border-4 border-sky-100 dark:border-sky-900 border-t-sky-600 rounded-full animate-spin"></div>
           <div className="absolute inset-0 flex items-center justify-center">
@@ -103,7 +103,7 @@ export default function LessonPlanPreview({ plan, onUpdatePlan, isGenerating }: 
 
   if (!plan) {
     return (
-      <div id="preview-empty" className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-sm p-12 text-center h-[650px] flex flex-col items-center justify-center space-y-4 transition-colors duration-200">
+      <div id="preview-empty" className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-sm p-12 text-center flex-1 overflow-y-auto flex flex-col items-center justify-center space-y-4 transition-colors duration-200">
         <div className="w-16 h-16 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-750 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500">
           <FileText className="w-8 h-8" />
         </div>
@@ -118,7 +118,7 @@ export default function LessonPlanPreview({ plan, onUpdatePlan, isGenerating }: 
   }
 
   return (
-    <div id="preview-active" className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col h-[650px] overflow-hidden text-left text-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div id="preview-active" className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col flex-1 overflow-y-auto overflow-hidden text-left text-slate-900 dark:text-slate-100 transition-colors duration-200">
       {/* Control Toolbar */}
       <div className="px-6 py-4 bg-slate-50/50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2">
@@ -216,7 +216,7 @@ export default function LessonPlanPreview({ plan, onUpdatePlan, isGenerating }: 
               id="textarea-editor"
               value={editedMarkdown}
               onChange={(e) => setEditedMarkdown(e.target.value)}
-              className="flex-1 w-full p-4 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 resize-none h-[420px]"
+              className="flex-1 w-full p-4 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 resize-none min-h-[300px]"
               placeholder="Gunakan format Markdown untuk menulis..."
             />
           </div>

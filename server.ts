@@ -137,7 +137,10 @@ app.post("/api/generate-lesson-plan", upload.single("rujukanFile"), async (req, 
       namaGuru,
       jenjang,
       mataPelajaran,
+      semester,
+      tahunAjaran,
       babTema,
+      subBab,
       fase,
       kelas,
       alokasiWaktu,
@@ -210,6 +213,46 @@ app.post("/api/generate-lesson-plan", upload.single("rujukanFile"), async (req, 
       });
     }
 
+    // Parse Alokasi Waktu to determine JP logic dynamically
+    const rawAlokasi = alokasiWaktu || "2 x 35 Menit";
+    
+    // Simple parser to extract first number of JP
+    const parseJpCount = (str: string): number => {
+      const normalized = str.toLowerCase();
+      const multMatch = normalized.match(/(\d+)\s*x\s*(\d+)/);
+      if (multMatch) return parseInt(multMatch[1], 10);
+      const jpMatch = normalized.match(/(\d+)\s*jp/);
+      if (jpMatch) return parseInt(jpMatch[1], 10);
+      const pertMatch = normalized.match(/(\d+)\s*pertemuan/);
+      if (pertMatch) return parseInt(pertMatch[1], 10) * 2;
+      const firstNum = normalized.match(/^(\d+)/);
+      if (firstNum) return parseInt(firstNum[1], 10);
+      return 2; // Default to 2
+    };
+
+    const jpCount = parseJpCount(rawAlokasi);
+    let sectionDInstruction = "";
+
+    if (jpCount <= 2) {
+      sectionDInstruction = `Oleh karena Alokasi Waktu HANYA 2 JP atau kurang (${rawAlokasi}), Anda wajib otomatis menghasilkan langkah pembelajaran untuk 1 pertemuan saja dengan judul tunggal persis seperti ini:
+### PERTEMUAN 1 (2 x 35 Menit)
+(Harap sesuaikan menit di dalam kurung jika Anda menginput rincian waktu berbeda seperti 2 x 40 menit, dst.)
+
+DILARANG KERAS membuat pertemuan tambahan atau menggabungkan pertemuan!`;
+    } else {
+      const jumlahPertemuan = Math.ceil(jpCount / 2);
+      let listPertemuanString = "";
+      for (let i = 1; i <= jumlahPertemuan; i++) {
+        listPertemuanString += `- PERTEMUAN ${i} (2 x 35 Menit) (Atau sesuaikan durasi menit per pertemuan)\n`;
+      }
+      
+      sectionDInstruction = `Oleh karena Alokasi Waktu LEBIH DARI 2 JP (${rawAlokasi}, terhitung sekitar ${jpCount} JP), Anda WAJIB memecah langkah kegiatan pembelajaran secara terpisah per satu pertemuan (per 2 JP). Setiap pertemuan mewakili 2 JP.
+Oleh karena itu, buatlah sebanyak ${jumlahPertemuan} pertemuan mandiri yang berurutan secara terpisah:
+${listPertemuanString}
+
+DILARANG KERAS menggabungkan dua atau lebih pertemuan menjadi satu sub-bab (contoh kesalahan yang harus dihindari: "PERTEMUAN 1 DAN 2"). Masing-masing pertemuan wajib memiliki sub-judul sendiri yang mandiri!`;
+    }
+
     const systemInstruction = `Anda adalah "Asisten Utama Penyusunan Perencanaan Pembelajaran Madrasah". Peran Anda adalah sebagai pakar kurikulum yang memadukan secara harmonis antara Kurikulum Merdeka (KMA Kemenag RI, seperti KMA 450 Tahun 2024), Peraturan Menteri Pendidikan Dasar dan Menengah RI No. 13 Tahun 2025 & No. 1 Tahun 2026 (Standar Proses), serta Keputusan Direktur Jenderal Pendidikan Islam No. 6077 Tahun 2025 tentang Panduan Kurikulum Berbasis Cinta (KBC).
 
 Berikut rujukan resmi dan filosofi penting yang WAJIB Anda terapkan dalam penyusunan perencanaan ini secara ketat:
@@ -236,7 +279,9 @@ Berikut rujukan resmi dan filosofi penting yang WAJIB Anda terapkan dalam penyus
    - Harus memiliki struktur lengkap: Identitas Modul, Kompetensi Awal, Profil Pelajar Pancasila & Rahmatan Lil Alamin (P2RA), Tujuan Pembelajaran, Pemahaman Bermakna, Pertanyaan Pemantik, Langkah Pembelajaran (Pendahuluan, Inti, Penutup), Asesmen, dan Refleksi.
    - Tulis langkah-langkah pembelajaran dengan dialog atau instruksi konkret guru (misalnya "Ucap Guru: ...", "Tindakan Siswa: ...") bernuansa kasih sayang, apresiatif, humanis, tanpa unsur kekerasan atau pemaksaan.
 
-Format keluaran Anda harus dalam Markdown yang terstruktur sangat rapi, dengan pembagian bab menggunakan format alfabet dan numerik yang persis, serta menggunakan penanda list (bullet) yang indah.`;
+Format keluaran Anda harus dalam Markdown yang terstruktur sangat rapi, dengan pembagian bab menggunakan format alfabet dan numerik yang persis, serta menggunakan penanda list (bullet) yang indah.
+
+PENTING: Untuk bagian "D. LANGKAH-LANGKAH KEGIATAN PEMBELAJARAN", Anda wajib mematuhi panduan pembagian pertemuan secara ketat sesuai dengan instruksi alokasi waktu yang dinamis di dalam user prompt. DILARANG KERAS menggabungkan beberapa pertemuan ke dalam satu sub-bab (contoh: "PERTEMUAN 1 DAN 2") atau mereduksi detail masing-masing kegiatan!`;
 
     const userPrompt = `Buatkan perencanaan pembelajaran (Modul Ajar / Perencanaan Pembelajaran) lengkap berbasis Kurikulum Merdeka Madrasah terintegrasi penuh dengan Deep Learning (Permendikbudristek 13/2025 & 1/2026) dan Kurikulum Berbasis Cinta (SK Dirjen Pendis 6077/2025):
 - Nama Madrasah: ${madrasah || "MTs Al-Iman 02 Bulus"}
@@ -244,6 +289,7 @@ Format keluaran Anda harus dalam Markdown yang terstruktur sangat rapi, dengan p
 - Jenjang: ${jenjang || "MTs / SMP"}
 - Mata Pelajaran: ${mataPelajaran}
 - Bab / Tema Utama: ${babTema}
+- Sub Bab Pengembangan: ${subBab || "Tidak ditentukan"}
 - Fase: ${fase}
 - Kelas: ${kelas}
 - Alokasi Waktu: ${alokasiWaktu || "[Alokasi Waktu]"}
@@ -252,6 +298,9 @@ Format keluaran Anda harus dalam Markdown yang terstruktur sangat rapi, dengan p
 - Elemen P2RA (Profil Pelajar Rahmatan Lil Alamin) yang difokuskan: ${p2raYangDipilih}
 - Fokus KBC Pancacinta: Dalam menyusun modul ajar ini, Anda WAJIB mengintegrasikan nilai-nilai KBC Pancacinta yang telah dipilih oleh guru, yaitu: (${pancacintaYangDipilih}). Jabarkan nilai-nilai cinta tersebut secara konkret ke dalam aktivitas interaksi guru-murid, cara guru memberikan apresiasi, serta pada bagian refleksi di akhir pembelajaran.
 ${catatanKhusus ? `- Catatan Khusus Kelas / Kebutuhan Belajar: ${catatanKhusus}` : ""}
+
+PENTING UNTUK SUB BAB PENGEMBANGAN:
+Jika user menginput Sub Bab Pengembangan di atas (yaitu: "${subBab || ""}"), Anda WAJIB merumuskan Alur dan Tujuan Pembelajaran serta Langkah Kegiatan Pembelajaran dengan berpatokan secara urut dan fokus pada cakupan Sub Bab Pembahasan yang diinput oleh user tersebut. Jangan membuat pembahasan di luar daftar sub-bab yang telah ditentukan tersebut.
 
 Harap susun dokumen ini dengan struktur berikut secara detail dan persis, tanpa mengurangi komponen apa pun:
 
@@ -263,6 +312,7 @@ Harap susun dokumen ini dengan struktur berikut secara detail dan persis, tanpa 
 - Mata Pelajaran: ${mataPelajaran}
 - Kelas / Fase: ${kelas} / ${fase}
 - Materi Pokok: ${babTema}
+- Sub Bab Pembahasan: ${subBab || "Tidak ditentukan"}
 - Tema KBC:
   1. ${pancacintaYangDipilih}
   2. -
@@ -273,8 +323,8 @@ Harap susun dokumen ini dengan struktur berikut secara detail dan persis, tanpa 
   (Tuliskan daftar dimensi Profil Pelajar Pancasila & Rahmatan Lil Alamin yang difokuskan secara lengkap dan deskripsikan aksi konkret penerapannya dalam aktivitas kelas, misalnya:)
   1. Keimanan dan Ketakwaan terhadap Tuhan Yang Maha Esa, dan Berakhlak Mulia: Mampu menerapkan akhlak mulia dan budi pekerti luhur dalam belajar sehari-hari.
   2. [Lanjutkan dengan dimensi-dimensi Profil Lulusan lain yang relevan secara komprehensif, seperti Kewargaan, Penalaran Kritis, Kreativitas, Kolaborasi, Kemandirian, Kesehatan, Komunikasi, dsb.]
-- Semester: Ganjil (atau sesuaikan dengan kelas)
-- Tahun Ajaran: 2025 / 2026
+- Semester: ${semester || "Ganjil"}
+- Tahun Ajaran: ${tahunAjaran || "2026 / 2027"}
 - Alokasi Waktu: ${alokasiWaktu || "2x40 Menit"}
 - Jumlah Pertemuan: [Hitung jumlah pertemuan secara logis berdasarkan alokasi waktu]
 
@@ -341,26 +391,26 @@ Pada akhir Fase ${fase}, peserta didik memiliki kemampuan sebagai berikut:
 ## C. TUJUAN PEMBELAJARAN DAN IKTP
 Tujuan Pembelajaran:
 1. [Tuliskan tujuan pembelajaran yang logis]
-Indikator Ketuntasan Tujuan Pembelajaran (IKTP)
-• Pertemuan 1 dan 2
-1. ...
-• Pertemuan 3 dan 4
-...
+Indikator Ketuntasan Tujuan Pembelajaran (IKTP) per Pertemuan secara terpisah:
+${jpCount <= 2 ? `• Pertemuan 1:\n1. ...` : `• Pertemuan 1:\n1. ...\n• Pertemuan 2:\n1. ...\n(lanjutkan per pertemuan jika ada)`}
 
 ## D. LANGKAH-LANGKAH KEGIATAN PEMBELAJARAN
-(Rancang langkah pembelajaran yang konkret untuk sekelompok pertemuan secara logis dan mendalam. Untuk setiap kelompok pertemuan, tuliskan detail sbb:)
-Pertemuan 1 dan 2
-Model Pembelajaran: ...
-Metode Pembelajaran: ...
-Topik: ...
+${sectionDInstruction}
+
+Setiap pertemuan wajib memiliki struktur lengkapnya sendiri secara berurutan dan terperinci sesuai format di bawah ini:
+
+### PERTEMUAN N (2 x 35 Menit)
+- Model Pembelajaran: ...
+- Metode Pembelajaran: ...
+- Topik: ...
 ● KEGIATAN PENDAHULUAN (15 MENIT)
   ○ Pembukaan: ...
-  ○ Apersepsi (Joyful): ...
+  ○ Apersepsi (Joyful): (Memicu Joyful/Mindful)
   ○ Pertanyaan Pemantik: ...
   ○ Tujuan: ...
 ● KEGIATAN INTI (55 MENIT)
-  ○ Eksplorasi (Mindful): ...
-  ○ Diskusi (Meaningful): ...
+  ○ Eksplorasi (Mindful): (Prinsip Mindful: fokus dan refleksi mendalam)
+  ○ Diskusi (Meaningful): (Prinsip Meaningful: mengaitkan materi dengan kehidupan nyata dan nilai Panca Cinta Kemenag seperti Hubbunnas/Hubbunnafs)
   ○ Penjelasan Konsep: ...
   ○ Pembelajaran Berdiferensiasi:
     ■ Proses: ...
@@ -370,6 +420,11 @@ Topik: ...
   ○ Rangkuman: ...
   ○ Tindak Lanjut: ...
   ○ Penutup: ...
+
+PENTING:
+- DILARANG KERAS menggabungkan beberapa pertemuan menjadi satu sub-bab (seperti "PERTEMUAN 1 DAN 2"). Masing-masing pertemuan wajib memiliki sub-judul sendiri yang mandiri!
+- Masing-masing pertemuan wajib memiliki struktur lengkapnya sendiri secara berurutan: Kegiatan Pendahuluan, Kegiatan Inti, dan Kegiatan Penutup yang spesifik dan unik sesuai urutan materi bab tersebut.
+- Tetap pertahankan integrasi Deep Learning (Mindful, Meaningful, Joyful), Kurikulum Berbasis Cinta (KBC Pancacinta), nilai P2RA, serta penanganan khusus untuk siswa secara halus di dalam langkah kegiatannya.
 
 ## E. ASESMEN PEMBELAJARAN
 ASESMEN DIAGNOSTIK

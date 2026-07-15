@@ -3,7 +3,6 @@ import { SavedLessonPlan, LessonPlanParams } from "./types";
 import LessonPlanForm from "./components/LessonPlanForm";
 import LessonPlanPreview from "./components/LessonPlanPreview";
 import HistoryList from "./components/HistoryList";
-import InstructionalGuides from "./components/InstructionalGuides";
 import {
   Compass,
   Heart,
@@ -15,7 +14,10 @@ import {
   Layers,
   AlertCircle,
   Sun,
-  Moon
+  Moon,
+  Bell,
+  CheckCircle2,
+  Loader2
 } from "lucide-react";
 
 export default function App() {
@@ -23,6 +25,20 @@ export default function App() {
   const [activePlan, setActivePlan] = useState<SavedLessonPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [activeCenterTab, setActiveCenterTab] = useState<"preview" | "riwayat">("preview");
+  const [notifications, setNotifications] = useState<Array<{
+    id: number | string;
+    type: "info" | "success" | "error" | "loading";
+    message: string;
+    time: string;
+  }>>([
+    {
+      id: 1,
+      type: "info",
+      message: "Sistem siap. Silakan isi formulir dan masukkan Token API Anda.",
+      time: "Sekarang"
+    }
+  ]);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     try {
       const stored = localStorage.getItem("theme");
@@ -81,8 +97,33 @@ export default function App() {
   const handleGeneratePlan = async (params: LessonPlanParams, file: File | null) => {
     setIsGenerating(true);
     setApiError(null);
+    const loadId = Date.now();
+    const timeNow = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+
+    // 1. Saat Tombol Generate Diklik (Proses Dimulai)
+    setNotifications(prev => [
+      {
+        id: loadId,
+        type: "loading",
+        message: "🔄 Menghubungkan ke Gemini... Memulai penyusunan Perencanaan Pembelajaran.",
+        time: timeNow
+      },
+      ...prev
+    ]);
 
     try {
+      // 2. Saat Proses Berjalan (Optional jika ada pembagian tahap)
+      const progressTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+      setNotifications(prev => [
+        {
+          id: `progress-${Date.now()}`,
+          type: "info",
+          message: "⚡ Menyusun materi inti, pendekatan Deep Learning, dan target karakter P2RA...",
+          time: progressTime
+        },
+        ...prev
+      ]);
+
       const formData = new FormData();
       Object.keys(params).forEach(key => {
         const val = (params as any)[key];
@@ -149,7 +190,23 @@ export default function App() {
       const updatedHistory = [newPlan, ...history];
       setHistory(updatedHistory);
       setActivePlan(newPlan);
+      setActiveCenterTab("preview");
       saveToLocalStorage(updatedHistory);
+
+      // 3. Jika Pembuatan RPP Berhasil (Success Block)
+      const successTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+      setNotifications(prev => {
+        const filtered = prev.filter(n => n.id !== loadId);
+        return [
+          {
+            id: Date.now(),
+            type: "success",
+            message: "🎉 Sukses! Modul Ajar telah berhasil disusun dan siap ditinjau/diekspor.",
+            time: successTime
+          },
+          ...filtered
+        ];
+      });
     } catch (error: any) {
       console.error("Error generating lesson plan:", error);
       let errMsg = error.message || "";
@@ -157,6 +214,21 @@ export default function App() {
         errMsg = "FAILED_TO_FETCH: Gagal menghubungi server atau koneksi diblokir oleh browser. Hal ini biasanya terjadi jika cookie keamanan diblokir atau terjadi masalah CORS.";
       }
       setApiError(errMsg);
+
+      // 4. Jika Proses Gagal atau Terjadi Timeout (Catch Block)
+      const errorTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+      setNotifications(prev => {
+        const filtered = prev.filter(n => n.id !== loadId);
+        return [
+          {
+            id: Date.now(),
+            type: "error",
+            message: "❌ Pembuatan Modul Ajar gagal. Silakan coba klik Generate ulang atau periksa jaringan Anda.",
+            time: errorTime
+          },
+          ...filtered
+        ];
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -166,10 +238,23 @@ export default function App() {
   const handleSelectPlan = (plan: SavedLessonPlan) => {
     setActivePlan(plan);
     setApiError(null);
+    setActiveCenterTab("preview");
+
+    const timeNow = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    setNotifications(prev => [
+      {
+        id: Date.now(),
+        type: "info",
+        message: `Membuka draf: ${plan.title}`,
+        time: timeNow
+      },
+      ...prev
+    ]);
   };
 
   // Delete an item from local history
   const handleDeletePlan = (id: string) => {
+    const planToDelete = history.find(p => p.id === id);
     const updatedHistory = history.filter(p => p.id !== id);
     setHistory(updatedHistory);
     saveToLocalStorage(updatedHistory);
@@ -177,6 +262,17 @@ export default function App() {
     if (activePlan?.id === id) {
       setActivePlan(updatedHistory.length > 0 ? updatedHistory[0] : null);
     }
+
+    const timeNow = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    setNotifications(prev => [
+      {
+        id: Date.now(),
+        type: "info",
+        message: `Draf dihapus: ${planToDelete?.title || "Modul Ajar"}`,
+        time: timeNow
+      },
+      ...prev
+    ]);
   };
 
   // Handle plan updates (e.g., when the user edits in the preview editor)
@@ -234,7 +330,7 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex flex-col gap-6">
+      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex flex-col gap-6">
         
         {/* Error notification */}
         {apiError && (
@@ -291,93 +387,154 @@ export default function App() {
         )}
 
         {/* 3-Column Bento Grid Layout for Ultimate Desktop Productivity */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 gap-6 lg:grid lg:grid-cols-12 lg:gap-8 xl:grid xl:grid-cols-12 xl:gap-6 items-start">
           
           {/* Column 1 (Left): Form & Quick Guide */}
-          <div className="lg:col-span-5 space-y-6">
-            <LessonPlanForm onSubmit={handleGeneratePlan} isGenerating={isGenerating} />
-            <InstructionalGuides />
+          <div className="lg:col-span-5 xl:col-span-4 space-y-6 xl:h-[calc(100vh-7rem)] xl:flex xl:flex-col">
+            <LessonPlanForm onSubmit={handleGeneratePlan} isGenerating={isGenerating} setNotifications={setNotifications} />
           </div>
 
           {/* Column 2 (Right): Active Preview panel, indicators, and history */}
-          <div className="lg:col-span-7 space-y-6 flex flex-col">
-            <LessonPlanPreview
-              plan={activePlan}
-              onUpdatePlan={handleUpdatePlan}
-              isGenerating={isGenerating}
-            />
+          <div className="lg:col-span-7 xl:col-span-5 flex flex-col lg:sticky lg:top-6 lg:h-[calc(100vh-6rem)] h-auto overflow-hidden xl:h-[calc(100vh-7rem)] xl:flex xl:flex-col">
+            {/* Tab Switcher */}
+            <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700/40 rounded-lg mb-4 shrink-0">
+              <button
+                type="button"
+                onClick={() => setActiveCenterTab("preview")}
+                className={`flex-1 transition-all duration-200 text-xs py-1.5 px-3 rounded-md text-center cursor-pointer ${
+                  activeCenterTab === "preview"
+                    ? "bg-blue-600 text-white font-medium shadow-xs"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
+                }`}
+              >
+                Preview Modul Ajar
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveCenterTab("riwayat")}
+                className={`flex-1 transition-all duration-200 text-xs py-1.5 px-3 rounded-md text-center cursor-pointer flex items-center justify-center gap-1.5 ${
+                  activeCenterTab === "riwayat"
+                    ? "bg-blue-600 text-white font-medium shadow-xs"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
+                }`}
+              >
+                <span>Riwayat Tersimpan</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                  activeCenterTab === "riwayat"
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                }`}>
+                  {history.length}
+                </span>
+              </button>
+            </div>
 
+            {/* Tab Contents */}
+            {activeCenterTab === "preview" ? (
+              <LessonPlanPreview
+                plan={activePlan}
+                onUpdatePlan={handleUpdatePlan}
+                isGenerating={isGenerating}
+              />
+            ) : (
+              <HistoryList
+                history={history}
+                onSelect={handleSelectPlan}
+                onDelete={handleDeletePlan}
+                selectedId={activePlan ? activePlan.id : null}
+              />
+            )}
+          </div>
+
+          {/* Kolom Kanan Baru (Tempat Status & Edukasi) */}
+          <div className="xl:col-span-3 lg:col-span-12 w-full xl:h-[calc(100vh-7rem)] xl:overflow-y-auto flex flex-col gap-4">
             {/* Indicator panels from Vibrant Palette */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 shrink-0 text-left">
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
-                <div className="bg-rose-100 dark:bg-rose-950/40 p-2.5 rounded-full text-rose-500 shrink-0">
-                  <Heart className="w-5 h-5 fill-rose-500" />
+            <div className="flex flex-col gap-3 w-full text-left">
+              <div className="bg-white dark:bg-slate-800 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
+                <div className="bg-rose-100 dark:bg-rose-950/40 p-1.5 rounded-full text-rose-500 shrink-0">
+                  <Heart className="w-4 h-4 fill-rose-500" />
                 </div>
                 <div className="leading-none">
-                  <p className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold tracking-widest mb-1">Love Index</p>
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Sangat Tinggi</p>
+                  <p className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold tracking-wider mb-0.5">Love Index</p>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Sangat Tinggi</p>
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
-                <div className="bg-amber-100 dark:bg-amber-950/40 p-2.5 rounded-full text-amber-500 shrink-0">
-                  <Compass className="w-5 h-5" />
+              <div className="bg-white dark:bg-slate-800 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
+                <div className="bg-amber-100 dark:bg-amber-950/40 p-1.5 rounded-full text-amber-500 shrink-0">
+                  <Compass className="w-4 h-4" />
                 </div>
                 <div className="leading-none">
-                  <p className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold tracking-widest mb-1">Diferensiasi</p>
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Aktif (AI Adjusted)</p>
+                  <p className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold tracking-wider mb-0.5">Diferensiasi</p>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Aktif (AI Adjusted)</p>
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
-                <div className="bg-sky-100 dark:bg-sky-950/40 p-2.5 rounded-full text-sky-500 shrink-0">
-                  <FileText className="w-5 h-5" />
+              <div className="bg-white dark:bg-slate-800 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
+                <div className="bg-sky-100 dark:bg-sky-950/40 p-1.5 rounded-full text-sky-500 shrink-0">
+                  <FileText className="w-4 h-4" />
                 </div>
                 <div className="leading-none">
-                  <p className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold tracking-widest mb-1">Status Perencanaan</p>
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                  <p className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold tracking-wider mb-0.5">Status Perencanaan</p>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
                     {activePlan ? "Siap Diekspor" : "Isi Parameter"}
                   </p>
                 </div>
               </div>
             </div>
-            
-            {/* Column 3 (Integrated as bottom drawer on right or grid column): Saved History */}
-            <HistoryList
-              history={history}
-              onSelect={handleSelectPlan}
-              onDelete={handleDeletePlan}
-              selectedId={activePlan ? activePlan.id : null}
-            />
+
+            {/* Pusat Notifikasi & Aktivitas */}
+            <div className="w-full flex-1 min-h-[250px] bg-slate-900/40 border border-slate-700/50 rounded-xl p-4 flex flex-col">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-sky-500 dark:text-sky-400" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  Pusat Notifikasi
+                </span>
+              </div>
+              <div className="border-b border-slate-800 my-3"></div>
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {notifications.map((item) => {
+                  let styleClasses = "";
+                  let IconComponent = Info;
+
+                  if (item.type === "error") {
+                    styleClasses = "bg-red-500/10 border-red-500/20 text-red-400";
+                    IconComponent = AlertCircle;
+                  } else if (item.type === "success") {
+                    styleClasses = "bg-green-500/10 border-green-500/20 text-green-400";
+                    IconComponent = CheckCircle2;
+                  } else if (item.type === "info") {
+                    styleClasses = "bg-blue-500/10 border-blue-500/20 text-blue-400";
+                    IconComponent = Info;
+                  } else if (item.type === "loading") {
+                    styleClasses = "bg-slate-800/50 border-slate-700/40 text-slate-300 animate-pulse";
+                    IconComponent = Loader2;
+                  }
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-2.5 border rounded-lg text-xs leading-relaxed flex items-start gap-2.5 transition-all duration-200 ${styleClasses}`}
+                    >
+                      <IconComponent className={`w-4 h-4 shrink-0 mt-0.5 ${item.type === "loading" ? "animate-spin" : ""}`} />
+                      <span className="flex-1 text-left">{item.message}</span>
+                      <span className="text-[10px] text-slate-500 ml-auto whitespace-nowrap pt-0.5">{item.time}</span>
+                    </div>
+                  );
+                })}
+                {notifications.length === 0 && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 italic text-center py-4">Tidak ada aktivitas baru</p>
+                )}
+              </div>
+            </div>
           </div>
 
         </div>
 
-        {/* Footer info explaining the synergy of the curriculum */}
-        <footer className="mt-12 pt-6 border-t border-slate-200/60 dark:border-slate-800 text-center space-y-4 max-w-3xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-            <div className="p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-xs transition-colors duration-200">
-              <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-1">Kurikulum Merdeka</span>
-              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-normal">
-                Fleksibilitas konten pembelajaran, berpusat pada murid, dan penguatan karakter Profil Pelajar Pancasila & Rahmatan Lil Alamin (P2RA).
-              </p>
-            </div>
-            <div className="p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-xs transition-colors duration-200">
-              <span className="text-xs font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest block mb-1">Deep Learning</span>
-              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-normal">
-                Mendorong proses belajar tingkat tinggi dengan 3 pilar: <strong>Mindful</strong> (penuh kesadaran), <strong>Meaningful</strong> (bermakna), dan <strong>Joyful</strong> (menyenangkan).
-              </p>
-            </div>
-            <div className="p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-xs transition-colors duration-200">
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block mb-1">Berbasis Cinta</span>
-              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-normal">
-                Mengutamakan iklim kelas yang aman (safe space), restitusi humanis, serta bimbingan bernuansa kasih sayang dari lubuk hati pendidik.
-              </p>
-            </div>
-          </div>
-          
+        {/* Footer */}
+        <footer className="mt-6 pt-4 border-t border-slate-200/60 dark:border-slate-800 text-center max-w-3xl mx-auto">
           <div className="text-[11px] text-slate-400 dark:text-slate-500">
-            © 2026 Asisten Penyusunan Perencanaan Pembelajaran Madrasah.
+            © 2026 Asisten Penyusunan Perencanaan Pembelajaran Madrasah
           </div>
         </footer>
 

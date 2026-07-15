@@ -24,7 +24,7 @@ export default function HistoryList({ history, onSelect, onDelete, selectedId }:
   });
 
   return (
-    <div id="history-section" className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[550px] text-left transition-colors duration-200">
+    <div id="history-section" className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden flex flex-col flex-1 overflow-y-auto text-left transition-colors duration-200">
       {/* Header with Search */}
       <div className="p-4 bg-slate-50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-700/60 space-y-3">
         <div className="flex items-center justify-between">

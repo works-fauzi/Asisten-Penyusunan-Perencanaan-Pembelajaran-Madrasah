@@ -3,7 +3,10 @@ export interface LessonPlanParams {
   namaGuru: string;
   jenjang: string;
   mataPelajaran: string;
+  semester?: string;
+  tahunAjaran?: string;
   babTema: string;
+  subBab?: string;
   fase: string;
   kelas: string;
   alokasiWaktu: string;
