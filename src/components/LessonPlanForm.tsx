@@ -437,7 +437,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             name="subBab"
             value={params.subBab || ""}
             onChange={handleChange}
-            placeholder="Contoh: Pengertian, Nama Lain, Macam-Macam, Tanda-Tanda, Alam Gaib"
+            placeholder="Contoh: Noun Groups, Possesive Adjectives, Passive Voice, dst..."
             className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
           />
         </div>
