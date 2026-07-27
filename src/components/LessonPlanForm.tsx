@@ -741,7 +741,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Belum memiliki Token API? Klik{" "}
             <a
-              href="https://aistudio.google.com/"
+              href="https://aistudio.google.com/api-keys"
               target="_blank"
               rel="noopener noreferrer"
               className="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline font-medium"
