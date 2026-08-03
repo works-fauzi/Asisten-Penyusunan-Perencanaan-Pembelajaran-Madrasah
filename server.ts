@@ -1,12 +1,8 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import multer from "multer";
-import fs from "fs";
-import os from "os";
-import crypto from "crypto";
 
 dotenv.config();
 
@@ -41,94 +37,186 @@ const upload = multer({
   },
 });
 
-// Initialization helper for Gemini API to get a fresh client instance every request
-function getAiClient(customKey?: string): GoogleGenAI {
-  const key = customKey ? customKey.trim() : "";
-  if (!key) {
-    throw new Error("Token API Gemini tidak diisi atau kosong! Pembuatan perencanaan pembelajaran dihentikan demi keamanan API Key sistem.");
-  }
-  return new GoogleGenAI({
-    apiKey: key,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
-}
+// API endpoint for verifying Gemini API Key
+app.post("/api/verify-key", async (req, res) => {
+  try {
+    const { geminiApiKey } = req.body;
+    const cleanToken = (geminiApiKey || "").trim();
 
-// Helper function to call generateContent with retry and model fallback to handle 503/429 errors gracefully
+    if (!cleanToken) {
+      return res.status(400).json({
+        status: "error",
+        error: "API Key Gemini tidak diisi atau kosong!",
+      });
+    }
+
+    const verifyUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${encodeURIComponent(cleanToken)}`;
+    const verifyRes = await fetch(verifyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: "Hi" }]
+          }
+        ]
+      })
+    });
+
+    if (verifyRes.ok) {
+      return res.json({
+        status: "success",
+        message: "API Key Gemini valid dan aktif!"
+      });
+    } else {
+      let errData: any = null;
+      try {
+        errData = await verifyRes.json();
+        console.log("Error Detail:", errData);
+      } catch (e) {
+        console.error("Failed to parse Gemini verify error response:", e);
+      }
+
+      const googleMsg = errData?.error?.message || "API Key Gemini ditolak oleh Google. Pastikan kunci sudah diaktifkan di Google AI Studio.";
+      return res.status(verifyRes.status).json({
+        status: "error",
+        error: googleMsg,
+        detail: errData
+      });
+    }
+  } catch (error: any) {
+    console.error("Error verifying Gemini API Key:", error);
+    return res.status(500).json({
+      status: "error",
+      error: "Gagal memverifikasi API Key Gemini ke Google. Periksa koneksi internet Anda."
+    });
+  }
+});
+
+// Helper function to call generateContent with retry and model fallback using official v1beta REST payload structure
 async function generateContentWithFallbackAndRetry(
-  aiInstance: GoogleGenAI,
+  cleanToken: string,
   params: {
-    contents: any[];
-    config: {
-      systemInstruction: string;
-      temperature: number;
-    };
+    systemInstruction: string;
+    parts: any[];
+    temperature?: number;
   }
 ) {
   const modelsToTry = [
     "gemini-3.5-flash",
-    "gemini-flash-latest",
-    "gemini-3.1-flash-lite"
+    "gemini-2.5-flash",
+    "gemini-1.5-flash"
   ];
-  
+
   let lastError: any = null;
-  
+
   for (const model of modelsToTry) {
     let retries = 3;
     let delay = 1000; // start with 1 second delay
-    
+
     while (retries > 0) {
       try {
         console.log(`[Gemini API] Attempting generation with model: ${model} (${retries} attempts remaining for this model)`);
-        const response = await aiInstance.models.generateContent({
-          model: model,
-          contents: params.contents,
-          config: params.config,
+
+        // Construct official Gemini v1beta payload structure
+        const payload: any = {
+          systemInstruction: {
+            parts: [
+              { text: params.systemInstruction }
+            ]
+          },
+          contents: [
+            {
+              role: "user",
+              parts: params.parts
+            }
+          ],
+          generationConfig: {
+            temperature: params.temperature ?? 0.7
+          }
+        };
+
+        const endpointUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(cleanToken.trim())}`;
+
+        const response = await fetch(endpointUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
         });
-        
-        // Successfully got a response
-        if (response && response.text) {
-          console.log(`[Gemini API] Generation succeeded with model: ${model}`);
-          return response;
+
+        if (response.ok) {
+          const resData = await response.json();
+          const candidates = resData.candidates;
+          if (candidates && candidates.length > 0 && candidates[0].content && candidates[0].content.parts) {
+            const textParts = candidates[0].content.parts.map((p: any) => p.text || "").join("\n");
+            if (textParts.trim()) {
+              console.log(`[Gemini API] Generation succeeded with model: ${model}`);
+              return textParts;
+            }
+          }
+          throw new Error("Received empty text content from Gemini response.");
         }
-        
-        throw new Error("Received empty or malformed response from Gemini API.");
-      } catch (error: any) {
-        lastError = error;
-        const errMsg = error.message || "";
-        const errStatus = error.status || (error.error && error.error.code);
-        
-        console.error(`[Gemini API] Error using model ${model}:`, errMsg);
-        
-        const is503 = errMsg.includes("503") || errStatus === 503 || errMsg.toUpperCase().includes("UNAVAILABLE") || errMsg.toLowerCase().includes("high demand");
-        const is429 = errMsg.includes("429") || errStatus === 429 || errMsg.toUpperCase().includes("RESOURCE_EXHAUSTED") || errMsg.toLowerCase().includes("quota");
-        
+
+        // Handle error status
+        let errJson: any = null;
+        try {
+          errJson = await response.json();
+          console.log("Error Detail:", errJson);
+        } catch (e) {
+          console.error("Could not parse Gemini error JSON:", e);
+        }
+
+        const errMessageFromGoogle = errJson?.error?.message || response.statusText;
+        console.error(`[Gemini API] Error status ${response.status} using model ${model}:`, errMessageFromGoogle);
+
+        if (
+          response.status === 400 ||
+          response.status === 401 ||
+          response.status === 403
+        ) {
+          throw new Error(errMessageFromGoogle || "API Key Gemini ditolak oleh Google. Pastikan kunci sudah diaktifkan di Google AI Studio.");
+        }
+
+        const is503 = response.status === 503 || errMessageFromGoogle.includes("503") || errMessageFromGoogle.toUpperCase().includes("UNAVAILABLE");
+        const is429 = response.status === 429 || errMessageFromGoogle.includes("429") || errMessageFromGoogle.toUpperCase().includes("RESOURCE_EXHAUSTED");
+
         if (is503 || is429) {
           retries--;
           if (retries > 0) {
-            console.warn(`[Gemini API] Model ${model} returned ${is503 ? "503 (Unavailable/High Demand)" : "429 (Rate Limit)"}. Retrying in ${delay}ms...`);
+            console.warn(`[Gemini API] Model ${model} returned ${is503 ? "503" : "429"}. Retrying in ${delay}ms...`);
             await new Promise((resolve) => setTimeout(resolve, delay));
             delay *= 2; // exponential backoff
             continue;
           }
         }
-        
-        // If it's not a temporary code or we exhausted retries, break out to try the next model
+
+        lastError = new Error(errMessageFromGoogle || "Terjadi kesalahan saat memproses request di Gemini API.");
+        break;
+      } catch (error: any) {
+        lastError = error;
+        const errMsg = error.message || "";
+        if (
+          errMsg.includes("ditolak oleh Google") ||
+          errMsg.includes("Gagal memproses request") ||
+          errMsg.includes("API Key")
+        ) {
+          throw error;
+        }
         break;
       }
     }
   }
-  
+
   throw lastError || new Error("Gagal melakukan pembuatan modul ajar menggunakan semua model yang tersedia.");
 }
 
 // API endpoint for generating lesson plans (supports optional file upload for Buku Rujukan)
 app.post("/api/generate-lesson-plan", upload.single("rujukanFile"), async (req, res) => {
-  let tempFilePath = "";
-  let uploadedFile: any = null;
   let geminiApiKeyFromClient = "";
 
   try {
@@ -153,7 +241,15 @@ app.post("/api/generate-lesson-plan", upload.single("rujukanFile"), async (req, 
     } = req.body;
 
     if (geminiApiKey) {
-      geminiApiKeyFromClient = geminiApiKey;
+      geminiApiKeyFromClient = geminiApiKey.trim();
+    }
+
+    if (!geminiApiKeyFromClient) {
+      return res.status(400).json({
+        status: "error",
+        error: "API Key Gemini tidak diisi atau kosong! Pembuatan perencanaan pembelajaran dihentikan.",
+        detail: "API Key Gemini tidak diisi atau kosong!"
+      });
     }
 
     if (!mataPelajaran || !babTema || !fase || !kelas) {
@@ -195,22 +291,16 @@ app.post("/api/generate-lesson-plan", upload.single("rujukanFile"), async (req, 
     }
 
     // Process file upload if present
+    let filePart: any = null;
     if (req.file) {
-      const tempDir = os.tmpdir();
-      const fileExt = path.extname(req.file.originalname) || (req.file.mimetype === "application/pdf" ? ".pdf" : ".docx");
-      const tempFileName = `rujukan-${crypto.randomUUID()}${fileExt}`;
-      tempFilePath = path.join(tempDir, tempFileName);
-
-      // Write buffer to local temp file so @google/genai SDK can read it
-      fs.writeFileSync(tempFilePath, req.file.buffer);
-
-      // Upload file to Gemini Files API
-      uploadedFile = await getAiClient(geminiApiKeyFromClient).files.upload({
-        file: tempFilePath,
-        config: {
-          mimeType: req.file.mimetype || (fileExt === ".pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+      const mimeType = req.file.mimetype || (req.file.originalname.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      const base64Data = req.file.buffer.toString("base64");
+      filePart = {
+        inlineData: {
+          mimeType: mimeType,
+          data: base64Data
         }
-      });
+      };
     }
 
     // Parse Alokasi Waktu to determine JP logic dynamically
@@ -283,6 +373,9 @@ Format keluaran Anda harus dalam Markdown yang terstruktur sangat rapi, dengan p
 
 PENTING: Untuk bagian "D. LANGKAH-LANGKAH KEGIATAN PEMBELAJARAN", Anda wajib mematuhi panduan pembagian pertemuan secara ketat sesuai dengan instruksi alokasi waktu yang dinamis di dalam user prompt. DILARANG KERAS menggabungkan beberapa pertemuan ke dalam satu sub-bab (contoh: "PERTEMUAN 1 DAN 2") atau mereduksi detail masing-masing kegiatan!`;
 
+    const cleanFaseStr = (fase || "").replace(/^(fase\s*)+/i, "").trim();
+    const formattedFase = cleanFaseStr ? (cleanFaseStr.toUpperCase() === "RA" ? "Fase RA" : `Fase ${cleanFaseStr}`) : "Fase D";
+
     const userPrompt = `Buatkan perencanaan pembelajaran (Modul Ajar / Perencanaan Pembelajaran) lengkap berbasis Kurikulum Merdeka Madrasah terintegrasi penuh dengan Deep Learning (Permendikbudristek 13/2025 & 1/2026) dan Kurikulum Berbasis Cinta (SK Dirjen Pendis 6077/2025):
 - Nama Madrasah: ${madrasah || "MTs Al-Iman 02 Bulus"}
 - Nama Guru: ${namaGuru || "Achmad Fauzi, S.S."}
@@ -290,7 +383,7 @@ PENTING: Untuk bagian "D. LANGKAH-LANGKAH KEGIATAN PEMBELAJARAN", Anda wajib mem
 - Mata Pelajaran: ${mataPelajaran}
 - Bab / Tema Utama: ${babTema}
 - Sub Bab Pengembangan: ${subBab || "Tidak ditentukan"}
-- Fase: ${fase}
+- Fase: ${formattedFase}
 - Kelas: ${kelas}
 - Alokasi Waktu: ${alokasiWaktu || "[Alokasi Waktu]"}
 - Buku Rujukan Utama: ${bukuRujukan || "[Buku Rujukan Utama]"}
@@ -310,7 +403,7 @@ Harap susun dokumen ini dengan struktur berikut secara detail dan persis, tanpa 
 - Nama Madrasah: ${madrasah || "MTs Al-Iman 02 Bulus"}
 - Nama Guru: ${namaGuru || "Achmad Fauzi, S.S."}
 - Mata Pelajaran: ${mataPelajaran}
-- Kelas / Fase: ${kelas} / ${fase}
+- Kelas / Fase: ${kelas} / ${formattedFase}
 - Materi Pokok: ${babTema}
 - Sub Bab Pembahasan: ${subBab || "Tidak ditentukan"}
 - Tema KBC:
@@ -330,7 +423,7 @@ Harap susun dokumen ini dengan struktur berikut secara detail dan persis, tanpa 
 
 ## B. DESAIN PEMBELAJARAN
 ### 1. Capaian Pembelajaran
-Pada akhir Fase ${fase}, peserta didik memiliki kemampuan sebagai berikut:
+Pada akhir ${formattedFase}, peserta didik memiliki kemampuan sebagai berikut:
 ● Membaca dan Memirsa: [Tuliskan deskripsi Capaian Pembelajaran secara detail dan relevan]
 ● Berbicara dan Mempresentasikan: [Tuliskan deskripsi Capaian Pembelajaran secara detail dan relevan]
 ● Menulis: [Tuliskan deskripsi Capaian Pembelajaran secara detail dan relevan]
@@ -444,64 +537,153 @@ ASESMEN SUMATIF
 
 Tulis dalam Bahasa Indonesia yang baku, indah, akademis, humanis, menyentuh hati, dan membangkitkan gairah mendidik bagi guru yang membacanya. Jangan tuliskan bagian Tanda Tangan guru, karena sistem akan menambahkannya secara otomatis. Letakkan semua bullet penjelas menggunakan tanda ● (bulat hitam), ○ (bulat putih), atau ■ (kotak hitam) secara rapi agar senada dengan file acuan.`;
 
-    const contents: any[] = [];
-    if (uploadedFile) {
-      // Pass the uploaded file from Files API to Gemini contents array
-      contents.push({
-        fileData: {
-          fileUri: uploadedFile.uri,
-          mimeType: uploadedFile.mimeType,
-        }
-      });
-      contents.push({
+    const parts: any[] = [];
+    if (filePart) {
+      parts.push(filePart);
+      parts.push({
         text: `DOKUMEN RUJUKAN UTAMA TELAH DIUNGGAH SEBAGAI LANDASAN UTAMA: Dokumen rujukan guru terlampir. Harap buat Modul Ajar / Perencanaan Pembelajaran dengan menyerap materi, kompetensi dasar, dan struktur bab dari dokumen ini secara maksimal.\n\n${userPrompt}`
       });
     } else {
-      contents.push({ text: userPrompt });
+      parts.push({ text: userPrompt });
     }
 
-    const response = await generateContentWithFallbackAndRetry(getAiClient(geminiApiKeyFromClient), {
-      contents: contents,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7,
-      },
+    const text = await generateContentWithFallbackAndRetry(geminiApiKeyFromClient, {
+      systemInstruction: systemInstruction,
+      parts: parts,
+      temperature: 0.7,
     });
 
-    const text = response.text;
     if (!text) {
       throw new Error("Gagal memperoleh hasil pembuatan rencana pembelajaran dari Gemini API.");
     }
     res.json({ status: "success", result: text });
   } catch (error: any) {
     console.error("Error generating lesson plan:", error);
+    let errMsg = error.message || "Terjadi kesalahan pada server saat menghubungi Gemini API.";
+    if (
+      errMsg.toLowerCase().includes("invalid argument") ||
+      errMsg.toLowerCase().includes("invalid_argument") ||
+      errMsg.includes("API key not valid")
+    ) {
+      errMsg = "Gagal memproses request. Pastikan API Key Gemini yang dimasukkan valid dan aktif di Google AI Studio.";
+    }
     res.status(500).json({
       status: "error",
-      error: error.message || "Terjadi kesalahan pada server saat menghubungi Gemini API.",
-      detail: error.message || "Terjadi kesalahan pada server saat menghubungi Gemini API."
+      error: errMsg,
+      detail: errMsg
     });
-  } finally {
-    try {
-      // ALWAYS clean up temporary local files
-      if (tempFilePath && fs.existsSync(tempFilePath)) {
-        try {
-          fs.unlinkSync(tempFilePath);
-        } catch (err) {
-          console.error("Failed to delete local temp file:", err);
-        }
-      }
-      // ALWAYS clean up uploaded Gemini Files API resources to avoid storage bloat/leaks
-      if (uploadedFile && uploadedFile.name) {
-        try {
-          const client = getAiClient(geminiApiKeyFromClient);
-          await client.files.delete({ name: uploadedFile.name });
-        } catch (err) {
-          console.error("Failed to delete Gemini Files API resource:", err);
-        }
-      }
-    } catch (cleanupError) {
-      console.error("Severe error in finally block cleanup:", cleanupError);
+  }
+});
+
+// API endpoint for generating Lembar Kerja Peserta Didik (LKPD) AI
+app.post("/api/generate-lkpd", async (req, res) => {
+  try {
+    const { geminiApiKey, selectedModule, selectedPertemuan } = req.body;
+
+    const cleanToken = (geminiApiKey || "").trim();
+    if (!cleanToken) {
+      return res.status(400).json({
+        status: "error",
+        error: "API Key Gemini tidak diisi atau kosong! Pembuatan LKPD dihentikan.",
+      });
     }
+
+    if (!selectedModule) {
+      return res.status(400).json({
+        status: "error",
+        error: "Silakan pilih Perencanaan Pembelajaran rujukan terlebih dahulu.",
+      });
+    }
+
+    const params = selectedModule.params || {};
+    const moduleTitle = params.babTema || selectedModule.title || "Perencanaan Pembelajaran";
+    const subBab = params.subBab || "-";
+    const mataPelajaran = params.mataPelajaran || "-";
+    const jenjang = params.jenjang || "MI";
+    const kelas = params.kelas || "-";
+    const fase = params.fase || "-";
+    const alokasiWaktu = params.alokasiWaktu || "-";
+    const madrasah = params.madrasah || "Madrasah";
+    const targetPertemuan = selectedPertemuan || "Semua Pertemuan";
+
+    // Determine Jenjang-based Sumative Assessment rules
+    let soalRule = "Buatkan 10 Soal Pilihan Ganda (opsi A, B, C, D) + 5 Soal Uraian/Essay.";
+    const jenjangUpper = jenjang.toUpperCase();
+    if (jenjangUpper.includes("MTS")) {
+      soalRule = "Buatkan 20 Soal Pilihan Ganda (opsi A, B, C, D) + 5 Soal Uraian/Essay.";
+    } else if (jenjangUpper.includes("MA") || jenjangUpper.includes("MAK")) {
+      soalRule = "Buatkan 30 Soal Pilihan Ganda (opsi A, B, C, D, E) + 5 Soal Uraian/Essay.";
+    }
+
+    const systemInstruction = `Anda adalah Tutor Ahli, Penyusun Kurikulum Madrasah (Kemenag & Kurikulum Merdeka), dan Pakar Desain Bahan Ajar / Lembar Kerja Peserta Didik (LKPD). Tugas Anda adalah membuat dokumen LKPD yang komprehensif, 100% MSO HTML Standard yang rapi, siap diekspor ke Microsoft Word (.docx) tanpa cacat visual.`;
+
+    const userPrompt = `Buatkan Lembar Kerja Peserta Didik (LKPD) berbasis data Perencanaan Pembelajaran berikut:
+- Modul Ajar Rujukan:
+  * Judul / Bab Utama: ${moduleTitle}
+  * Sub-Bab / Topik: ${subBab}
+  * Mata Pelajaran: ${mataPelajaran}
+  * Jenjang Madrasah: ${jenjang}
+  * Kelas / Fase: Kelas ${kelas} / Fase ${fase}
+  * Alokasi Waktu: ${alokasiWaktu}
+  * Nama Madrasah: ${madrasah}
+  * Rincian Modul Ajar Rujukan:
+${selectedModule.markdownContent ? selectedModule.markdownContent.slice(0, 3000) : "Sesuai standar Kurikulum Merdeka Kemenag"}
+- Target Pertemuan: ${targetPertemuan}
+
+Wajib susun dokumen LKPD dengan STRUKTUR MSO HTML STANDARD berikut:
+
+1. KETEGASAN KODE HTML DOKUMEN & ELIMINASI SPASI KOSONG SEBELUM JUDUL:
+   - DILARANG KERAS mengeluarkan tag <html>, <head>, <style>, atau <body> dalam response.
+   - DILARANG KERAS mencetak/menyertakan deklarasi kode CSS (seperti .header-table { ... }) maupun komentar CSS (seperti /* Page Break */) di dalam teks response.
+   - DILARANG KERAS menyisipkan tag <br> atau elemen paragraf kosong (<p>&nbsp;</p>) di antara banner/header identitas atas dan judul utama "LEMBAR KERJA PESERTA DIDIK".
+   - HANYA keluarkan elemen HTML/Markdown isi dokumen (seperti <h1>, <h2>, <h3>, <table>, <p>, <div>, <ul>, <ol>) yang langsung dimulai dari judul utama dokumen tanpa jeda spasi kosong. Seluruh styling CSS dokumen dikapsulasi secara otomatis oleh aplikasi.
+
+2. KONSISTENSI FONT (PREVIEW APLIKASI & MS WORD):
+   - Terapkan aturan font global secara eksplisit pada seluruh elemen HTML:
+     font-family: 'Times New Roman', Times, serif !important; pada html, body, table, td, th, p, div, span, h1, h2, h3, li.
+
+3. PENGHILANGAN KOLOM TANDA TANGAN:
+   - HILANGKAN SELURUH kolom/tabel tanda tangan (seperti kolom Tanda Tangan Kepala Madrasah & Guru Pengampu) di bagian bawah dokumen. LKPD selesai langsung setelah Asesmen Sumatif / Lampiran Pegangan Guru.
+
+4. STANDARISASI DIAGRAM & PLACEHOLDER GAMBAR:
+   - Ubah seluruh diagram alir/peta konsep/skema materi menjadi TABEL & BORDER CSS HTML MURNI (border: 1.5px solid #000000; border-collapse: collapse; padding: 6px; font-family: 'Times New Roman', Times, serif !important;).
+   - Ganti gambar/SVG dengan BINGKAI PLACEHOLDER KOTAK:
+     <div style="border: 1.5px dashed #000000; padding: 10px; background-color: #fafafa; margin: 10px 0; text-align: center; font-family: 'Times New Roman', Times, serif !important;">
+       <b>[BINGKAI ILUSTRASI LEARNING MEDIA]</b><br/>
+       <i>AI Image Prompt (English):</i> "Black and white line art, clean outlines, simple coloring page style, no color, no shading, plain white background, minimalist vector illustration for school worksheet, featuring [deskripsi rinci objek/suasana]"
+     </div>
+   - Format tempat pengisian jawaban siswa wajib menggunakan:
+     <div class="write-line" style="border-bottom: 1.5px dotted #000000; min-height: 22px; width: 100%; margin: 8px 0;">....................................................................................................</div>
+
+5. STRUKTUR MATERI LKPD:
+   A. HEADER & IDENTITAS DOKUMEN:
+      - Header Utama: LEMBAR KERJA PESERTA DIDIK
+      - Sub-Header: Integrasi Deep Learning & Kurikulum Berbasis Cinta
+      - Informasi: FASE ${fase} • KELAS ${kelas}
+      - Identitas: Judul Bab, Mata Pelajaran, Nama Siswa (garis titik-titik ....................), dan Petunjuk Umum.
+   B. PENDAHULUAN / STIMULUS: Apersepsi singkat & kontekstual.
+   C. AKTIVITAS PEMBELAJARAN: Kelompokkan per Pertemuan (${targetPertemuan}). Memiliki Tujuan, Petunjuk, Tugas, dan Garis Isian Jawaban.
+   D. ASESMEN SUMATIF (ULANGAN HARIAN): ${soalRule}
+   E. LAMPIRAN PEGAWAI GURU (HALAMAN TERPISAH): Kunci Jawaban Lengkap & Pedoman Penskoran.`;
+
+    const textResult = await generateContentWithFallbackAndRetry(cleanToken, {
+      systemInstruction,
+      parts: [{ text: userPrompt }],
+      temperature: 0.7
+    });
+
+    if (!textResult) {
+      throw new Error("Gagal memperoleh hasil pembuatan LKPD dari Gemini API.");
+    }
+
+    return res.json({ status: "success", lkpdContent: textResult });
+  } catch (error: any) {
+    console.error("Error generating LKPD:", error);
+    let errMsg = error.message || "Terjadi kesalahan pada server saat menghubungi Gemini API.";
+    return res.status(500).json({
+      status: "error",
+      error: errMsg
+    });
   }
 });
 

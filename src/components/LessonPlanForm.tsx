@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { LessonPlanParams } from "../types";
+import React, { useState, useEffect, useMemo } from "react";
+import { LessonPlanParams, SavedLessonPlan } from "../types";
 import {
   JENJANG_OPTIONS,
   FASE_OPTIONS,
@@ -12,11 +12,18 @@ import {
   PANCACINTA_PRESETS,
   INITIAL_PARAMS
 } from "../data";
-import { Sparkles, HelpCircle, AlertCircle, RefreshCw, Layers, Book, Compass, Settings, Upload, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, HelpCircle, AlertCircle, RefreshCw, Layers, Book, Compass, Settings, Upload, X, ChevronDown, ChevronUp, Check, FileText } from "lucide-react";
 
 interface LessonPlanFormProps {
   onSubmit: (params: LessonPlanParams, file: File | null) => void;
   isGenerating: boolean;
+  activePlan?: SavedLessonPlan | null;
+  history?: SavedLessonPlan[];
+  onSelectPlan?: (plan: SavedLessonPlan) => void;
+  onGenerateLKPD?: (selectedModule: SavedLessonPlan, selectedPertemuan: string) => void;
+  leftTab?: "form" | "lkpd";
+  setLeftTab?: (tab: "form" | "lkpd") => void;
+  onSelectCenterTab?: (tab: "preview" | "lkpd" | "riwayat") => void;
   setNotifications?: React.Dispatch<React.SetStateAction<Array<{
     id: number | string;
     type: "info" | "success" | "error" | "loading";
@@ -25,99 +32,242 @@ interface LessonPlanFormProps {
   }>>>;
 }
 
-export default function LessonPlanForm({ onSubmit, isGenerating, setNotifications }: LessonPlanFormProps) {
-  const [params, setParams] = useState<LessonPlanParams>({ ...INITIAL_PARAMS });
+export default function LessonPlanForm({
+  onSubmit,
+  isGenerating,
+  activePlan,
+  history,
+  onSelectPlan,
+  onGenerateLKPD,
+  leftTab,
+  setLeftTab,
+  onSelectCenterTab,
+  setNotifications
+}: LessonPlanFormProps) {
+  const [localLeftTab, setLocalLeftTab] = useState<"form" | "lkpd">("form");
+  const activeLeftTab = leftTab ?? localLeftTab;
+
+  const handleSetLeftTab = (tab: "form" | "lkpd") => {
+    if (setLeftTab) {
+      setLeftTab(tab);
+    }
+    setLocalLeftTab(tab);
+  };
+
+  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(activePlan?.id || null);
+  const [selectedPertemuan, setSelectedPertemuan] = useState<string>("Semua Pertemuan");
+
+  useEffect(() => {
+    if (activePlan && (!selectedModuleId || !history?.some(h => h.id === selectedModuleId))) {
+      setSelectedModuleId(activePlan.id);
+    }
+  }, [activePlan, history]);
+
+  // Reset selectedPertemuan when selectedModuleId changes
+  useEffect(() => {
+    setSelectedPertemuan("Semua Pertemuan");
+  }, [selectedModuleId]);
+
+  const selectedModule = (history || []).find(h => h.id === selectedModuleId) || (activePlan?.id === selectedModuleId ? activePlan : null);
+
+  // Dynamic meeting options calculation
+  const meetingOptions = useMemo(() => {
+    if (!selectedModule) {
+      return [{ value: "Semua Pertemuan", label: "Semua Pertemuan (Default)" }];
+    }
+
+    let count = 0;
+
+    // 1. Direct properties
+    const directCount = (selectedModule as any).jumlahPertemuan || (selectedModule as any).totalPertemuan || (selectedModule.params as any)?.jumlahPertemuan;
+    if (typeof directCount === "number" && directCount > 0) {
+      count = directCount;
+    } else if (typeof directCount === "string" && !isNaN(parseInt(directCount, 10))) {
+      count = parseInt(directCount, 10);
+    }
+
+    // 2. Try parsing alokasiWaktu (e.g. "2 JP (1 Pertemuan)", "4 JP (2 Pertemuan)", "3 Pertemuan", "6 JP")
+    if (!count && selectedModule.params?.alokasiWaktu) {
+      const match = selectedModule.params.alokasiWaktu.match(/(\d+)\s*pertemuan/i);
+      if (match && match[1]) {
+        count = parseInt(match[1], 10);
+      }
+    }
+
+    // 3. Try parsing markdownContent for highest "Pertemuan X"
+    if (!count && selectedModule.markdownContent) {
+      const matches = Array.from(selectedModule.markdownContent.matchAll(/pertemuan\s*(\d+)/gi));
+      if (matches.length > 0) {
+        const numbers = matches.map(m => parseInt(m[1], 10)).filter(n => !isNaN(n) && n > 0 && n <= 10);
+        if (numbers.length > 0) {
+          count = Math.max(...numbers);
+        }
+      }
+    }
+
+    // 4. Fallback to default 3 meetings if not specifically detected
+    if (!count || count < 1 || count > 10) {
+      count = 3;
+    }
+
+    const options = [{ value: "Semua Pertemuan", label: "Semua Pertemuan (Default)" }];
+    for (let i = 1; i <= count; i++) {
+      options.push({ value: `Pertemuan ${i}`, label: `Pertemuan ${i}` });
+    }
+
+    return options;
+  }, [selectedModule]);
+
+  const handleResetLkpdForm = () => {
+    setSelectedModuleId(null);
+    setSelectedPertemuan("Semua Pertemuan");
+  };
+
+  const [params, setParams] = useState<LessonPlanParams>(() => {
+    const savedApiKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") : null;
+    return {
+      ...INITIAL_PARAMS,
+      geminiApiKey: savedApiKey || INITIAL_PARAMS.geminiApiKey || ""
+    };
+  });
+
+  // Sync geminiApiKey changes to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const key = params.geminiApiKey || "";
+      if (key.trim()) {
+        localStorage.setItem("gemini_api_key", key.trim());
+      }
+    }
+  }, [params.geminiApiKey]);
   const [showP2RADesc, setShowP2RADesc] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
+  const [isVerifyingKey, setIsVerifyingKey] = useState(false);
+  const [keyVerifyStatus, setKeyVerifyStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
   // Keep track of last checked API key to avoid double-checking
   const lastVerifiedKey = React.useRef<string>("");
 
-  useEffect(() => {
-    const key = params.geminiApiKey?.trim();
-    if (!key || key === "" || key === lastVerifiedKey.current) {
+  const handleVerifyKey = async (customKeyToVerify?: string) => {
+    const rawKey = customKeyToVerify ?? params.geminiApiKey ?? "";
+    const cleanKey = rawKey.trim();
+
+    if (!cleanKey) {
+      setKeyVerifyStatus({
+        type: "error",
+        message: "API Key Gemini tidak diisi atau kosong!"
+      });
       return;
     }
 
-    // Only attempt validation if the key is at least 15 chars (to avoid validating incomplete keys)
-    if (key.length < 15) {
-      return;
-    }
+    setIsVerifyingKey(true);
+    setKeyVerifyStatus(null);
 
-    const timer = setTimeout(async () => {
-      lastVerifiedKey.current = key;
-      const timeString = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const timeString = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-      // 1. Saat Pengecekan Dimulai:
-      // Tepat sebelum melakukan fetch ke API Google, tambahkan sebuah notifikasi baru tipe info ke dalam array
-      const startId = Date.now();
-      const newLoadingNotif = {
-        id: startId,
-        type: "info" as const,
-        message: "Memverifikasi Token API Gemini...",
-        time: timeString
-      };
-      if (setNotifications) {
-        setNotifications(prev => [newLoadingNotif, ...prev]);
-      }
-
-      try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
-        const resTimeString = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-        if (response.ok) {
-          // 2. Jika API Key Valid (Respons Sukses / HTTP 200):
-          // Tambahkan notifikasi sukses ke dalam array
-          const newSuccessNotif = {
-            id: Date.now(),
-            type: "success" as const,
-            message: "Koneksi Berhasil! Token API Gemini valid dan aktif.",
-            time: resTimeString
-          };
-          if (setNotifications) {
-            setNotifications(prev => [newSuccessNotif, ...prev]);
-          }
-        } else {
-          // 3. Jika API Key Invalid atau Terjadi Error (Catch Block / HTTP Fail):
-          // Tangkap pesan error dari respons Google (jika ada), lalu tambahkan notifikasi error ke dalam array
-          let customErrorMessage = "Gagal memverifikasi API Key. Pastikan kunci benar atau periksa batasan CORS Anda.";
-          try {
-            const data = await response.json();
-            if (data?.error?.message) {
-              customErrorMessage = `Gagal memverifikasi API Key. Pastikan kunci benar atau periksa batasan CORS Anda. Detail: ${data.error.message}`;
+    try {
+      const verifyUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${encodeURIComponent(cleanKey)}`;
+      const response = await fetch(verifyUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: "Hi" }]
             }
-          } catch (_) {
-            // Keep original message if JSON parsing fails
-          }
+          ]
+        })
+      });
 
-          const newErrorNotif = {
-            id: Date.now(),
-            type: "error" as const,
-            message: customErrorMessage,
-            time: resTimeString
-          };
-          if (setNotifications) {
-            setNotifications(prev => [newErrorNotif, ...prev]);
-          }
-        }
-      } catch (err: any) {
-        const resTimeString = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        const newErrorNotif = {
-          id: Date.now(),
-          type: "error" as const,
-          message: "Gagal memverifikasi API Key. Pastikan kunci benar atau periksa batasan CORS Anda.",
-          time: resTimeString
-        };
+      if (response.ok) {
+        const successMsg = "API Key Gemini valid dan aktif!";
+        setKeyVerifyStatus({
+          type: "success",
+          message: successMsg
+        });
         if (setNotifications) {
-          setNotifications(prev => [newErrorNotif, ...prev]);
+          setNotifications(prev => [
+            {
+              id: Date.now(),
+              type: "success",
+              message: "Koneksi Berhasil! API Key Gemini valid dan aktif.",
+              time: timeString
+            },
+            ...prev
+          ]);
+        }
+      } else {
+        let errJson: any = null;
+        try {
+          errJson = await response.json();
+          console.log("Error Detail:", errJson);
+        } catch (e) {
+          console.error("Error parsing Gemini verify response JSON:", e);
+        }
+
+        const failMsg = errJson?.error?.message || "API Key Gemini ditolak oleh Google. Pastikan kunci sudah diaktifkan di Google AI Studio.";
+        setKeyVerifyStatus({
+          type: "error",
+          message: failMsg
+        });
+        if (setNotifications) {
+          setNotifications(prev => [
+            {
+              id: Date.now(),
+              type: "error",
+              message: failMsg,
+              time: timeString
+            },
+            ...prev
+          ]);
         }
       }
-    }, 1200); // 1.2s debounce to avoid checking while typing
+    } catch (err: any) {
+      console.error("Error verifying key:", err);
+      const netMsg = "Gagal memverifikasi API Key Gemini ke Google. Periksa koneksi internet Anda.";
+      setKeyVerifyStatus({
+        type: "error",
+        message: netMsg
+      });
+      if (setNotifications) {
+        setNotifications(prev => [
+          {
+            id: Date.now(),
+            type: "error",
+            message: netMsg,
+            time: timeString
+          },
+          ...prev
+        ]);
+      }
+    } finally {
+      setIsVerifyingKey(false);
+    }
+  };
+
+  useEffect(() => {
+    const rawKey = params.geminiApiKey || "";
+    const cleanKey = rawKey.trim();
+    if (!cleanKey || cleanKey === lastVerifiedKey.current) {
+      return;
+    }
+
+    if (cleanKey.length < 10) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      lastVerifiedKey.current = cleanKey;
+      handleVerifyKey(cleanKey);
+    }, 1200);
 
     return () => clearTimeout(timer);
-  }, [params.geminiApiKey, setNotifications]);
+  }, [params.geminiApiKey]);
 
   // States for accordion panels
   const [isKbcOpen, setIsKbcOpen] = useState(false);
@@ -224,27 +374,80 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(params, file);
+    const rawKey = params.geminiApiKey || "";
+    const cleanKey = rawKey.trim();
+
+    if (!cleanKey) {
+      setKeyVerifyStatus({
+        type: "error",
+        message: "API Key Gemini wajib diisi untuk mengaktifkan pembuat perencanaan pembelajaran."
+      });
+      return;
+    }
+
+    const cleanParams = {
+      ...params,
+      geminiApiKey: cleanKey
+    };
+    onSubmit(cleanParams, file);
   };
 
   const resetForm = () => {
-    setParams({ ...INITIAL_PARAMS, madrasah: "", namaGuru: "", babTema: "", bukuRujukan: "", catatanKhusus: "", geminiApiKey: "" });
+    setParams({
+      ...INITIAL_PARAMS,
+      madrasah: "",
+      namaGuru: "",
+      babTema: "",
+      bukuRujukan: "",
+      catatanKhusus: "",
+      geminiApiKey: params.geminiApiKey || localStorage.getItem("gemini_api_key") || ""
+    });
     setFile(null);
     setFileError(null);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col text-left transition-colors duration-200 xl:h-full xl:max-h-full xl:overflow-hidden">
-      {/* Dynamic Theme Header */}
-      <div className="flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-slate-700 pb-4 shrink-0">
-        <div className="w-1.5 h-6 bg-sky-500 rounded-full"></div>
-        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">Formulir Perencanaan</h2>
+    <div className="bg-white dark:bg-[#131b2e] rounded-2xl border border-slate-200 dark:border-slate-800/70 shadow-sm dark:shadow-none p-4 sm:p-5 flex flex-col text-left transition-colors duration-200 h-auto lg:h-full overflow-hidden">
+      {/* Top Left Column Tab Switcher */}
+      <div className="flex bg-slate-100 dark:bg-[#0b1021] p-1 rounded-xl border border-slate-200 dark:border-slate-800/80 mb-3 flex-none shadow-xs">
+        <button
+          type="button"
+          id="tab-left-form"
+          onClick={() => handleSetLeftTab("form")}
+          className={`flex-1 py-2 px-2.5 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            activeLeftTab === "form"
+              ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200/80 dark:border-slate-700/80 font-bold"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 font-medium"
+          }`}
+        >
+          <span className="truncate">Modul Ajar</span>
+        </button>
+        <button
+          type="button"
+          id="tab-left-lkpd"
+          onClick={() => handleSetLeftTab("lkpd")}
+          className={`flex-1 py-2 px-2.5 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            activeLeftTab === "lkpd"
+              ? "bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs border border-slate-200/80 dark:border-slate-700/80 font-bold"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 font-medium"
+          }`}
+        >
+          <span className="truncate">Lembar Kerja Peserta Didik</span>
+        </button>
       </div>
 
-      <div className="space-y-4 xl:flex-1 xl:overflow-y-auto pr-1">
+      {activeLeftTab === "form" ? (
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          {/* Dynamic Theme Header */}
+          <div className="flex items-center gap-2 mb-3 border-b border-slate-100 dark:border-slate-700 pb-2.5 flex-none">
+            <div className="w-1.5 h-5 bg-sky-500 rounded-full"></div>
+            <h2 className="text-base font-bold text-slate-800 dark:text-slate-200">Formulir Modul Ajar</h2>
+          </div>
+
+          <div className="space-y-4 flex-1 overflow-y-auto p-1.5 sm:p-2 custom-scrollbar">
         {/* Row 1: Nama Madrasah */}
         <div>
-          <label id="lbl-madrasah" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+          <label id="lbl-madrasah" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
             Nama Madrasah
           </label>
           <input
@@ -254,13 +457,13 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             value={params.madrasah}
             onChange={handleChange}
             placeholder="Contoh: MTs Al-Iman 02 Bulus"
-            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
+            className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
           />
         </div>
 
         {/* Row 2: Nama Guru */}
         <div>
-          <label id="lbl-guru" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+          <label id="lbl-guru" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
             Nama Guru
           </label>
           <input
@@ -270,14 +473,14 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             value={params.namaGuru}
             onChange={handleChange}
             placeholder="Contoh: Achmad Fauzi, S.S."
-            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
+            className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
           />
         </div>
 
         {/* Row 3, 4, 5: Jenjang, Fase & Kelas (Grid) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label id="lbl-jenjang" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+            <label id="lbl-jenjang" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
               Jenjang
             </label>
             <select
@@ -285,7 +488,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
               name="jenjang"
               value={params.jenjang}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer text-slate-900 dark:text-slate-100 dark:[&>option]:bg-slate-800"
+              className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all cursor-pointer dark:[&>option]:bg-slate-800"
             >
               {JENJANG_OPTIONS.map((opt, idx) => (
                 <option key={idx} value={opt}>{opt}</option>
@@ -293,7 +496,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             </select>
           </div>
           <div>
-            <label id="lbl-fase" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1 flex items-center justify-between">
+            <label id="lbl-fase" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
               Fase
               <span className="text-[10px] text-sky-600 dark:text-sky-400 lowercase bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 rounded font-normal">
                 auto-fase
@@ -304,7 +507,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
               name="fase"
               value={params.fase}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer text-slate-900 dark:text-slate-100 dark:[&>option]:bg-slate-800"
+              className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all cursor-pointer dark:[&>option]:bg-slate-800"
             >
               {FASE_OPTIONS.map((opt, idx) => (
                 <option key={idx} value={opt.value}>{opt.label}</option>
@@ -312,7 +515,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             </select>
           </div>
           <div>
-            <label id="lbl-kelas" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1 flex items-center justify-between">
+            <label id="lbl-kelas" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
               Kelas
               <span className="text-[10px] text-amber-600 dark:text-amber-400 lowercase bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded font-normal">
                 auto-kelas
@@ -323,7 +526,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
               name="kelas"
               value={params.kelas}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all cursor-pointer text-slate-900 dark:text-slate-100 dark:[&>option]:bg-slate-800"
+              className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all cursor-pointer dark:[&>option]:bg-slate-800"
             >
               {(FASE_TO_KELAS_MAP[params.fase] || KELAS_OPTIONS).map((opt, idx) => (
                 <option key={idx} value={opt}>{opt}</option>
@@ -334,7 +537,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
 
         {/* Row 6: Mata Pelajaran */}
         <div>
-          <label id="lbl-mapel" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+          <label id="lbl-mapel" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
             Mata Pelajaran
           </label>
           <select
@@ -342,7 +545,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             name="mataPelajaran"
             value={params.mataPelajaran}
             onChange={handleChange}
-            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer text-slate-900 dark:text-slate-100 dark:[&>option]:bg-slate-800"
+            className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all cursor-pointer dark:[&>option]:bg-slate-800"
             required
           >
             {getMataPelajaranOptions(params.jenjang, params.fase, params.kelas).map((subj, idx) => (
@@ -356,7 +559,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
         {/* Row 6.5: Semester & Tahun Ajaran */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label id="lbl-semester" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+            <label id="lbl-semester" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
               Semester
             </label>
             <select
@@ -364,7 +567,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
               name="semester"
               value={params.semester || "Ganjil"}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer text-slate-900 dark:text-slate-100 dark:[&>option]:bg-slate-800"
+              className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all cursor-pointer dark:[&>option]:bg-slate-800"
               required
             >
               <option value="Ganjil">Ganjil</option>
@@ -372,7 +575,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             </select>
           </div>
           <div>
-            <label id="lbl-tahun-ajaran" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+            <label id="lbl-tahun-ajaran" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
               Tahun Ajaran
             </label>
             <select
@@ -380,7 +583,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
               name="tahunAjaran"
               value={params.tahunAjaran || "2026 / 2027"}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all cursor-pointer text-slate-900 dark:text-slate-100 dark:[&>option]:bg-slate-800"
+              className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all cursor-pointer dark:[&>option]:bg-slate-800"
               required
             >
               <option value="2026 / 2027">2026 / 2027</option>
@@ -395,7 +598,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
         {/* Row 7, 8: Alokasi Waktu & Bab/Tema Utama */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label id="lbl-alokasi" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+            <label id="lbl-alokasi" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
               Alokasi Waktu
             </label>
             <input
@@ -405,11 +608,11 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
               value={params.alokasiWaktu}
               onChange={handleChange}
               placeholder="Contoh: 2 x 35 menit"
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
+              className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>
           <div className="sm:col-span-2">
-            <label id="lbl-babtema" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+            <label id="lbl-babtema" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
               Bab / Tema Utama
             </label>
             <input
@@ -419,7 +622,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
               value={params.babTema}
               onChange={handleChange}
               placeholder="Contoh: Chapter 1: Exploring Fauna of Indonesia"
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
+              className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
               required
             />
           </div>
@@ -427,7 +630,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
 
         {/* Row 8.5: Sub Bab Pengembangan */}
         <div>
-          <label id="lbl-subbab" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+          <label id="lbl-subbab" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
             Sub Bab Pengembangan
             <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal lowercase ml-1">(opsional)</span>
           </label>
@@ -438,7 +641,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             value={params.subBab || ""}
             onChange={handleChange}
             placeholder="Contoh: Noun Groups, Possesive Adjectives, Passive Voice, dst..."
-            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
+            className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
           />
         </div>
 
@@ -448,7 +651,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             type="button"
             id="lbl-pancacinta"
             onClick={() => setIsKbcOpen(!isKbcOpen)}
-            className="w-full flex items-center justify-between py-2.5 px-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left uppercase"
+            className="w-full flex items-center justify-between py-2.5 px-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-lg text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left"
           >
             <span>Fokus KBC Pancacinta{params.pancacintaPilihan && params.pancacintaPilihan.length > 0 ? ` (${params.pancacintaPilihan.length} Terpilih)` : ""}</span>
             {isKbcOpen ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
@@ -494,7 +697,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             type="button"
             id="lbl-p2ra"
             onClick={() => setIsP2raOpen(!isP2raOpen)}
-            className="w-full flex items-center justify-between py-2.5 px-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left uppercase"
+            className="w-full flex items-center justify-between py-2.5 px-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-lg text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left"
           >
             <span>Fokus Karakter Rahmatan Lil Alamin (P2RA){params.p2raPilihan && params.p2raPilihan.length > 0 ? ` (${params.p2raPilihan.length} Terpilih)` : ""}</span>
             {isP2raOpen ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
@@ -561,7 +764,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             type="button"
             id="lbl-metode"
             onClick={() => setIsMetodeOpen(!isMetodeOpen)}
-            className="w-full flex items-center justify-between py-2.5 px-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left uppercase"
+            className="w-full flex items-center justify-between py-2.5 px-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-lg text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left"
           >
             <span>Metode Pembelajaran Utama{params.metodePembelajaran.length > 0 ? ` (${params.metodePembelajaran.length} Terpilih)` : ""}</span>
             {isMetodeOpen ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
@@ -603,7 +806,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
 
         {/* Row 12: Buku Rujukan Utama */}
         <div>
-          <label id="lbl-rujukan" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
+          <label id="lbl-rujukan" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
             Buku Rujukan Utama
           </label>
           <input
@@ -613,7 +816,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             value={params.bukuRujukan}
             onChange={handleChange}
             placeholder="Contoh: English for Nusantara Kelas IX Kemendikbud (2022)"
-            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100 mb-2.5"
+            className="w-full min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 mb-2.5"
           />
 
           {/* Combined drag-and-drop file upload */}
@@ -623,7 +826,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
                 ? "border-sky-500 bg-sky-50/50 dark:bg-sky-950/20"
                 : file
                 ? "border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/10"
-                : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/30 dark:bg-slate-900/20"
+                : "border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 bg-slate-50 text-slate-900 dark:bg-[#0b1021]/80 dark:text-slate-100"
             }`}
             onDragOver={(e) => {
               e.preventDefault();
@@ -660,10 +863,10 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
                     setFile(null);
                     setFileError(null);
                   }}
-                  className="p-1 text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors shrink-0 cursor-pointer"
+                  className="p-2 text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors shrink-0 cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                   title="Hapus file"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             ) : (
@@ -699,7 +902,7 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
 
         {/* Row 13: Catatan Khusus */}
         <div>
-          <label id="lbl-catatan" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1 flex items-center gap-1">
+          <label id="lbl-catatan" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
             Catatan Khusus Belajar Kelas
             <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal lowercase">(opsional)</span>
           </label>
@@ -710,36 +913,74 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             onChange={handleChange}
             rows={3}
             placeholder="Contoh: Kelas sangat aktif, 3 murid membutuhkan bimbingan lambat..."
-            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100 resize-none"
+            className="w-full px-3 py-2 bg-slate-50 text-slate-900 border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 resize-none"
           />
         </div>
 
-        {/* Row 12.5: Token API Gemini */}
+        {/* Row 12.5: API Key Gemini */}
         <div>
-          <label id="lbl-gemini-api-key" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">
-            Token API Gemini <span className="text-rose-500 font-bold">* (Wajib Diisi)</span>
+          <label id="lbl-gemini-api-key" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+            API Key Gemini
           </label>
-          <input
-            id="input-gemini-api-key"
-            type="password"
-            name="geminiApiKey"
-            value={params.geminiApiKey || ""}
-            onChange={handleChange}
-            required
-            placeholder="Masukkan API Key Gemini Anda..."
-            className={`w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border rounded-lg text-sm focus:ring-2 focus:ring-sky-500/20 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100 mb-1.5 ${
-              !params.geminiApiKey || !params.geminiApiKey.trim()
-                ? "border-rose-300 dark:border-rose-900 focus:border-rose-500 focus:ring-rose-500/20"
-                : "border-slate-200 dark:border-slate-700 focus:border-sky-500"
-            }`}
-          />
-          {(!params.geminiApiKey || !params.geminiApiKey.trim()) && (
+          <div className="flex items-center gap-2 mb-1.5">
+            <input
+              id="input-gemini-api-key"
+              type="password"
+              name="geminiApiKey"
+              value={params.geminiApiKey || ""}
+              onChange={(e) => {
+                handleChange(e);
+                setKeyVerifyStatus(null);
+              }}
+              required
+              placeholder="Masukkan API Key Gemini Anda..."
+              className={`flex-1 min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 dark:bg-[#0b1021]/80 dark:text-slate-100 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 ${
+                !params.geminiApiKey || !params.geminiApiKey.trim()
+                  ? "border-rose-300 dark:border-rose-900 focus:ring-rose-500/20"
+                  : "border-slate-300 dark:border-slate-700/80 focus:ring-blue-500"
+              }`}
+            />
+            <button
+              type="button"
+              id="btn-verify-gemini-key"
+              onClick={() => handleVerifyKey()}
+              disabled={isVerifyingKey || !params.geminiApiKey || !params.geminiApiKey.trim()}
+              className="px-3.5 py-2.5 h-[44px] text-xs font-bold bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Uji apakah API Key aktif dan valid"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isVerifyingKey ? "animate-spin" : ""}`} />
+              {isVerifyingKey ? "Menguji..." : "Uji Key"}
+            </button>
+          </div>
+
+          {keyVerifyStatus ? (
+            <div
+              className={`p-2.5 rounded-lg text-xs font-medium mb-1.5 flex items-start gap-2 ${
+                keyVerifyStatus.type === "success"
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                  : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+              }`}
+            >
+              {keyVerifyStatus.type === "success" ? (
+                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              )}
+              <span className="flex-1">{keyVerifyStatus.message}</span>
+            </div>
+          ) : params.geminiApiKey && params.geminiApiKey.trim() ? (
+            <div className="p-2.5 rounded-lg text-xs font-medium mb-1.5 flex items-start gap-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <span className="flex-1">API Key Gemini valid dan aktif!</span>
+            </div>
+          ) : (
             <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium mb-1.5 flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5" /> Token API Gemini wajib diisi untuk mengaktifkan tombol Generate.
+              <AlertCircle className="w-3.5 h-3.5" /> API Key Gemini wajib diisi untuk mengaktifkan tombol Generate.
             </p>
           )}
+
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Belum memiliki Token API? Klik{" "}
+            Belum punya API Key Gemini? Klik{" "}
             <a
               href="https://aistudio.google.com/api-keys"
               target="_blank"
@@ -748,18 +989,19 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             >
               di sini
             </a>{" "}
-            untuk membuat Token API Gemini Anda secara gratis.
+            untuk membuat secara gratis.
           </p>
         </div>
+      </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+        {/* Action Buttons - Sticky on mobile bottom */}
+        <div className="sticky bottom-2 z-10 bg-white/95 dark:bg-slate-900/95 p-2 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-md backdrop-blur-md lg:static lg:bg-transparent lg:p-0 lg:border-none lg:shadow-none lg:backdrop-blur-none flex items-center gap-3 w-full mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60">
           <button
             type="button"
             id="btn-form-reset"
             onClick={resetForm}
             disabled={isGenerating}
-            className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer text-slate-700 dark:text-slate-300"
+            className="px-4 py-2.5 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer min-h-[44px] flex items-center justify-center shrink-0 shadow-xs dark:shadow-none"
           >
             Reset Form
           </button>
@@ -767,13 +1009,238 @@ export default function LessonPlanForm({ onSubmit, isGenerating, setNotification
             type="submit"
             id="btn-form-submit"
             disabled={isGenerating || !params.geminiApiKey || !params.geminiApiKey.trim()}
-            className="flex-1 bg-sky-600 hover:bg-sky-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 py-2.5 px-4 text-xs font-semibold rounded-xl bg-sky-600 hover:bg-sky-500 text-white transition-colors flex items-center justify-center gap-2 border border-sky-600 dark:border-sky-500 disabled:bg-slate-200 dark:disabled:bg-slate-800/80 disabled:border-slate-300 dark:disabled:border-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer min-h-[44px] shadow-xs"
           >
-            <Sparkles className="h-5 w-5" />
-            {isGenerating ? "Menganalisis Kurikulum..." : "Generate Modul AI"}
+            <Sparkles className="h-4 w-4" />
+            {isGenerating ? "Menganalisis Kurikulum..." : "Generate Modul"}
           </button>
         </div>
-      </div>
-    </form>
+      </form>
+      ) : (
+        /* Form Tab Generate LKPD */
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden text-left">
+          {/* Header */}
+          <div className="flex items-center justify-between gap-2 mb-3 border-b border-slate-100 dark:border-slate-700 pb-2.5 flex-none">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-5 bg-amber-500 rounded-full"></div>
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-200">Formulir Lembar Kerja Peserta Didik</h2>
+            </div>
+          </div>
+
+          <div className="space-y-4 flex-1 overflow-y-auto p-1.5 sm:p-2 custom-scrollbar text-xs sm:text-sm">
+            {/* 1. LIST VIEW PEMILIHAN MODUL (DAFTAR PERENCANAAN) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                  Pilih Perencanaan Pembelajaran
+                </label>
+                {selectedModule && (
+                  <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800/60 px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Selected
+                  </span>
+                )}
+              </div>
+
+              {(() => {
+                const modulHistory = (history || []).filter(plan => !plan.type || plan.type === 'modul');
+                if (modulHistory.length === 0) {
+                  return (
+                    /* Empty State jika belum ada riwayat modul tersimpan */
+                    <div className="p-4 bg-slate-50 dark:bg-[#0b1021]/60 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-center space-y-1.5">
+                      <FileText className="w-6 h-6 text-slate-400 mx-auto" />
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+                        Belum ada Modul Ajar tersimpan. Silakan buat perencanaan terlebih dahulu di tab Formulir Perencanaan.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  /* List View (Daftar Kartu Ringkas Modul Ajar) */
+                  <div className="max-h-56 overflow-y-auto space-y-2 custom-scrollbar pr-1">
+                    {modulHistory.map((plan) => {
+                      const isSelected = selectedModuleId === plan.id;
+                      return (
+                        <div
+                          key={plan.id}
+                          id={`card-module-${plan.id}`}
+                          onClick={() => {
+                            setSelectedModuleId(plan.id);
+                            if (onSelectPlan) {
+                              onSelectPlan(plan);
+                            }
+                          }}
+                          className={`p-3 rounded-xl transition-all cursor-pointer border text-left relative ${
+                            isSelected
+                              ? "border-2 border-sky-500 bg-sky-50/80 dark:bg-sky-950/40 dark:border-sky-400 shadow-xs ring-2 ring-sky-500/20"
+                              : "border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-[#0b1021]/80 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100/80 dark:hover:bg-[#0b1021]"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                                {plan.params?.babTema || plan.title || plan.judul}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                <span className="font-semibold text-sky-600 dark:text-sky-400">
+                                  {plan.params?.mataPelajaran || plan.matpel || "Mata Pelajaran"}
+                                </span>
+                                <span>•</span>
+                                <span>Kelas {plan.params?.kelas || plan.kelas || "-"}</span>
+                                <span>•</span>
+                                <span className="uppercase font-medium">{plan.params?.jenjang || plan.jenjang || "-"}</span>
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <div className="w-5 h-5 rounded-full bg-sky-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                <Check className="w-3 h-3 stroke-[3]" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* 2. DROPDOWN PILIH PERTEMUAN */}
+            <div className="space-y-1.5 pt-1">
+              <label id="lbl-pilih-pertemuan" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                Pilih Pertemuan
+              </label>
+              <select
+                id="select-pertemuan"
+                value={selectedPertemuan}
+                disabled={!selectedModule}
+                onChange={(e) => setSelectedPertemuan(e.target.value)}
+                className="w-full min-h-[42px] px-3 py-2 bg-slate-50 text-slate-900 border border-slate-300 dark:bg-[#0b1021]/80 dark:text-slate-100 dark:border-slate-700/80 rounded-xl text-xs focus:ring-2 focus:ring-inset focus:ring-amber-500 focus:outline-none transition-all cursor-pointer dark:[&>option]:bg-slate-800 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {meetingOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* API Key Gemini Section */}
+            <div>
+              <label id="lbl-api-key-lkpd" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                API Key Gemini
+              </label>
+              <div className="flex items-center gap-2 mb-1.5">
+                <input
+                  id="input-gemini-api-key-lkpd"
+                  type="password"
+                  name="geminiApiKey"
+                  value={params.geminiApiKey || ""}
+                  onChange={(e) => {
+                    handleChange(e);
+                    setKeyVerifyStatus(null);
+                  }}
+                  required
+                  placeholder="Masukkan API Key Gemini Anda..."
+                  className={`flex-1 min-h-[44px] px-3 py-2 bg-slate-50 text-slate-900 dark:bg-[#0b1021]/80 dark:text-slate-100 rounded-lg text-sm focus:ring-2 focus:ring-inset focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 ${
+                    !params.geminiApiKey || !params.geminiApiKey.trim()
+                      ? "border-rose-300 dark:border-rose-900 focus:ring-rose-500/20"
+                      : "border-slate-300 dark:border-slate-700/80 focus:ring-amber-500"
+                  }`}
+                />
+                <button
+                  type="button"
+                  id="btn-verify-gemini-key-lkpd"
+                  onClick={() => handleVerifyKey()}
+                  disabled={isVerifyingKey || !params.geminiApiKey || !params.geminiApiKey.trim()}
+                  className="px-3.5 py-2.5 h-[44px] text-xs font-bold bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Uji apakah API Key aktif dan valid"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isVerifyingKey ? "animate-spin" : ""}`} />
+                  {isVerifyingKey ? "Menguji..." : "Uji Key"}
+                </button>
+              </div>
+
+              {keyVerifyStatus ? (
+                <div
+                  className={`p-2.5 rounded-lg text-xs font-medium mb-1.5 flex items-start gap-2 ${
+                    keyVerifyStatus.type === "success"
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                      : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                  }`}
+                >
+                  {keyVerifyStatus.type === "success" ? (
+                    <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <span className="flex-1">{keyVerifyStatus.message}</span>
+                </div>
+              ) : params.geminiApiKey && params.geminiApiKey.trim() ? (
+                <div className="p-2.5 rounded-lg text-xs font-medium mb-1.5 flex items-start gap-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <span className="flex-1">API Key Gemini valid dan aktif!</span>
+                </div>
+              ) : (
+                <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium mb-1.5 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" /> API Key Gemini wajib diisi untuk mengaktifkan tombol Generate.
+                </p>
+              )}
+
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Terhubung otomatis dengan Formulir Perencanaan. Belum punya API Key Gemini? Klik{" "}
+                <a
+                  href="https://aistudio.google.com/api-keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline font-medium"
+                >
+                  di sini
+                </a>{" "}
+                untuk membuat secara gratis.
+              </p>
+            </div>
+          </div>
+
+          {/* 3. ACTION BUTTONS (GENERATE LKPD & RESET FORM) */}
+          <div className="sticky bottom-2 z-10 bg-white/95 dark:bg-slate-900/95 p-2 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-md backdrop-blur-md lg:static lg:bg-transparent lg:p-0 lg:border-none lg:shadow-none lg:backdrop-blur-none flex items-center gap-3 w-full mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60">
+            <button
+              type="button"
+              id="btn-reset-lkpd-form"
+              onClick={handleResetLkpdForm}
+              disabled={isGenerating}
+              className="px-4 py-2.5 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer min-h-[44px] flex items-center justify-center shrink-0 shadow-xs dark:shadow-none"
+              title="Reset pilihan modul dan pertemuan"
+            >
+              Reset Form
+            </button>
+
+            <button
+              type="button"
+              id="btn-generate-lkpd-ai"
+              disabled={!selectedModule || isGenerating || !params.geminiApiKey?.trim()}
+              onClick={() => {
+                if (!selectedModule || !params.geminiApiKey?.trim()) return;
+                if (onSelectCenterTab) {
+                  onSelectCenterTab("lkpd");
+                }
+                if (onGenerateLKPD) {
+                  onGenerateLKPD(selectedModule, selectedPertemuan);
+                }
+              }}
+              className="flex-1 py-2.5 px-4 text-xs font-semibold rounded-xl bg-amber-600 hover:bg-amber-500 text-white transition-colors flex items-center justify-center gap-2 border border-amber-600 dark:border-amber-500 disabled:bg-slate-200 dark:disabled:bg-slate-800/80 disabled:border-slate-300 dark:disabled:border-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer min-h-[44px] shadow-xs"
+            >
+              <Sparkles className="h-4 w-4 shrink-0" />
+              {isGenerating ? "Generasi LKPD AI..." : "Generate LKPD"}
+            </button>
+          </div>
+          {!selectedModule && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 text-center font-medium mt-1.5">
+              ⚠️ Silakan pilih salah satu Perencanaan Pembelajaran di atas untuk mengaktifkan tombol Generate LKPD.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

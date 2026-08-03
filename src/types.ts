@@ -20,8 +20,20 @@ export interface LessonPlanParams {
 
 export interface SavedLessonPlan {
   id: string;
+  type?: 'modul' | 'lkpd';
   title: string;
   params: LessonPlanParams;
   markdownContent: string;
+  lkpdContent?: string;
   createdAt: string;
+
+  // Additional optional properties for direct property access
+  typeDoc?: 'modul' | 'lkpd';
+  judul?: string;
+  matpel?: string;
+  kelas?: string;
+  fase?: string;
+  jenjang?: string;
+  tanggal?: string;
+  content?: string;
 }

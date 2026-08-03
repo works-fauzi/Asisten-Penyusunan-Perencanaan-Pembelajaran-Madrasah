@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { SavedLessonPlan, LessonPlanParams } from "./types";
 import LessonPlanForm from "./components/LessonPlanForm";
 import LessonPlanPreview from "./components/LessonPlanPreview";
+import LkpdPreview from "./components/LkpdPreview";
 import HistoryList from "./components/HistoryList";
 import {
   Files,
@@ -26,8 +27,11 @@ export default function App() {
   const [history, setHistory] = useState<SavedLessonPlan[]>([]);
   const [activePlan, setActivePlan] = useState<SavedLessonPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingLKPD, setIsGeneratingLKPD] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [activeCenterTab, setActiveCenterTab] = useState<"preview" | "riwayat">("preview");
+  const [activeCenterTab, setActiveCenterTab] = useState<"preview" | "lkpd" | "riwayat">("preview");
+  const [leftTab, setLeftTab] = useState<"form" | "lkpd">("form");
+  const [mobileTab, setMobileTab] = useState<"form" | "preview" | "notifications">("form");
   const [notifications, setNotifications] = useState<Array<{
     id: number | string;
     type: "info" | "success" | "error" | "loading";
@@ -54,7 +58,7 @@ export default function App() {
     return "light";
   });
 
-  // Sync theme to document element and localStorage
+  // Sync theme to document element
   useEffect(() => {
     try {
       if (theme === "dark") {
@@ -62,7 +66,6 @@ export default function App() {
       } else {
         document.documentElement.classList.remove("dark");
       }
-      localStorage.setItem("theme", theme);
     } catch (_) {}
   }, [theme]);
 
@@ -92,6 +95,15 @@ export default function App() {
     };
   }, []);
 
+  // Toggle tema secara manual dan simpan preferensi ke localStorage
+  const toggleTheme = () => {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    setTheme(nextTheme);
+    try {
+      localStorage.setItem("theme", nextTheme);
+    } catch (_) {}
+  };
+
   // Mengubah ikon tab browser (favicon) secara dinamis
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
@@ -109,8 +121,18 @@ export default function App() {
     } catch (_) {}
   }, []);
 
-  const toggleTheme = () => {
-    setTheme(prev => (prev === "light" ? "dark" : "light"));
+  // Helper function to add real-time notifications with HH:mm time format
+  const addNotification = (type: "info" | "success" | "error" | "loading", message: string) => {
+    const timeNow = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    setNotifications(prev => [
+      {
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        type,
+        message,
+        time: timeNow
+      },
+      ...prev
+    ]);
   };
 
   // Load history from localStorage on mount
@@ -142,8 +164,26 @@ export default function App() {
   const handleGeneratePlan = async (params: LessonPlanParams, file: File | null) => {
     setIsGenerating(true);
     setApiError(null);
+    setActiveCenterTab("preview");
+    setMobileTab("preview");
     const loadId = Date.now();
     const timeNow = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+
+    // Sanitize API Key on-the-fly
+    const rawApiKey = params.geminiApiKey || "";
+    const sanitizedApiKey = rawApiKey.trim();
+    const sanitizedParams = {
+      ...params,
+      geminiApiKey: sanitizedApiKey
+    };
+
+    if (!sanitizedApiKey) {
+      const emptyKeyMsg = "API Key Gemini wajib diisi untuk mengaktifkan pembuat perencanaan pembelajaran.";
+      setApiError(emptyKeyMsg);
+      addNotification("error", emptyKeyMsg);
+      setIsGenerating(false);
+      return;
+    }
 
     // 1. Saat Tombol Generate Diklik (Proses Dimulai)
     setNotifications(prev => [
@@ -157,7 +197,7 @@ export default function App() {
     ]);
 
     try {
-      // 2. Saat Proses Berjalan (Optional jika ada pembagian tahap)
+      // 2. Saat Proses Berjalan
       const progressTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
       setNotifications(prev => [
         {
@@ -170,8 +210,8 @@ export default function App() {
       ]);
 
       const formData = new FormData();
-      Object.keys(params).forEach(key => {
-        const val = (params as any)[key];
+      Object.keys(sanitizedParams).forEach(key => {
+        const val = (sanitizedParams as any)[key];
         if (Array.isArray(val)) {
           val.forEach(item => {
             formData.append(key, item);
@@ -202,19 +242,20 @@ export default function App() {
         throw new Error("COOKIE_CHECK_BLOCKED: Browser Anda memblokir cookie keamanan pihak ketiga (third-party cookies) dalam iframe AI Studio. Silakan buka aplikasi di tab baru.");
       }
 
-      if (!response.ok) {
-        console.error("Status:", response.status, "Body:", text);
-        let errorMessage = `API error ${response.status}: ${text.slice(0, 200)}`;
-        try {
-          if (text.trim().startsWith("{")) {
-            const errorJson = JSON.parse(text);
-            if (errorJson.error) {
-              errorMessage = errorJson.error;
+        if (!response.ok) {
+          console.error("Status:", response.status, "Body:", text);
+          let errorMessage = `API error ${response.status}: ${text.slice(0, 200)}`;
+          try {
+            if (text.trim().startsWith("{")) {
+              const errorJson = JSON.parse(text);
+              console.log("Response Gemini Error:", errorJson);
+              if (errorJson.error) {
+                errorMessage = errorJson.error;
+              }
             }
-          }
-        } catch (_) {}
-        throw new Error(errorMessage);
-      }
+          } catch (_) {}
+          throw new Error(errorMessage);
+        }
 
       let data;
       try {
@@ -226,8 +267,17 @@ export default function App() {
 
       const newPlan: SavedLessonPlan = {
         id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
-        title: `${params.mataPelajaran} - ${params.babTema}`,
-        params: params,
+        type: 'modul',
+        typeDoc: 'modul',
+        title: `${sanitizedParams.mataPelajaran} - ${sanitizedParams.babTema}`,
+        judul: `${sanitizedParams.mataPelajaran} - ${sanitizedParams.babTema}`,
+        matpel: sanitizedParams.mataPelajaran,
+        kelas: sanitizedParams.kelas,
+        fase: sanitizedParams.fase,
+        jenjang: sanitizedParams.jenjang,
+        tanggal: new Date().toISOString(),
+        content: data.result,
+        params: sanitizedParams,
         markdownContent: data.result,
         createdAt: new Date().toISOString()
       };
@@ -244,6 +294,12 @@ export default function App() {
         const filtered = prev.filter(n => n.id !== loadId);
         return [
           {
+            id: `save-${Date.now()}`,
+            type: "success",
+            message: "Modul Ajar berhasil disimpan ke Riwayat Tersimpan.",
+            time: successTime
+          },
+          {
             id: Date.now(),
             type: "success",
             message: "🎉 Sukses! Modul Ajar telah berhasil disusun dan siap ditinjau/diekspor.",
@@ -255,12 +311,18 @@ export default function App() {
     } catch (error: any) {
       console.error("Error generating lesson plan:", error);
       let errMsg = error.message || "";
-      if (errMsg.includes("Failed to fetch") || errMsg.includes("NetworkError")) {
+      if (
+        errMsg.toLowerCase().includes("invalid argument") ||
+        errMsg.toLowerCase().includes("invalid_argument") ||
+        errMsg.includes("API key not valid")
+      ) {
+        errMsg = "Gagal memproses request. Pastikan API Key Gemini yang dimasukkan valid dan aktif di Google AI Studio.";
+      } else if (errMsg.includes("Failed to fetch") || errMsg.includes("NetworkError")) {
         errMsg = "FAILED_TO_FETCH: Gagal menghubungi server atau koneksi diblokir oleh browser. Hal ini biasanya terjadi jika cookie keamanan diblokir atau terjadi masalah CORS.";
       }
       setApiError(errMsg);
 
-      // 4. Jika Proses Gagal atau Terjadi Timeout (Catch Block)
+      // 4. Jika Proses Gagal
       const errorTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
       setNotifications(prev => {
         const filtered = prev.filter(n => n.id !== loadId);
@@ -268,7 +330,9 @@ export default function App() {
           {
             id: Date.now(),
             type: "error",
-            message: "❌ Pembuatan Modul Ajar gagal. Silakan coba klik Generate ulang atau periksa jaringan Anda.",
+            message: errMsg.startsWith("Gagal memproses request") || errMsg.startsWith("Format API Key")
+              ? errMsg
+              : `❌ Pembuatan Modul Ajar gagal: ${errMsg}`,
             time: errorTime
           },
           ...filtered
@@ -279,18 +343,171 @@ export default function App() {
     }
   };
 
+  // Submit handler to call our Express API route for generating LKPD AI
+  const handleGenerateLKPD = async (selectedModule: SavedLessonPlan, selectedPertemuan: string) => {
+    if (!selectedModule) return;
+    
+    // Auto-switch middle column to LKPD tab
+    setIsGeneratingLKPD(true);
+    setApiError(null);
+    setActiveCenterTab("lkpd");
+    setMobileTab("preview");
+
+    const loadId = Date.now();
+    const timeNow = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    const moduleTitle = selectedModule.params?.babTema || selectedModule.title || "Perencanaan Pembelajaran";
+    const apiKey = (selectedModule.params?.geminiApiKey || "").trim();
+
+    if (!apiKey) {
+      const emptyKeyMsg = "API Key Gemini wajib diisi untuk mengaktifkan pembuat LKPD AI.";
+      setApiError(emptyKeyMsg);
+      addNotification("error", emptyKeyMsg);
+      setIsGeneratingLKPD(false);
+      return;
+    }
+
+    setNotifications(prev => [
+      {
+        id: loadId,
+        type: "loading",
+        message: `🔄 Menghubungkan ke Gemini... Memulai penyusunan LKPD (${selectedPertemuan}) untuk: ${moduleTitle}.`,
+        time: timeNow
+      },
+      ...prev
+    ]);
+
+    try {
+      const progressTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+      setNotifications(prev => [
+        {
+          id: `progress-lkpd-${Date.now()}`,
+          type: "info",
+          message: "⚡ Menyusun Stimulus, Aktivitas Pembelajaran, Line-Art SVG, dan Asesmen Sumatif...",
+          time: progressTime
+        },
+        ...prev
+      ]);
+
+      const response = await fetch("/api/generate-lkpd", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          geminiApiKey: apiKey,
+          selectedModule: selectedModule,
+          selectedPertemuan: selectedPertemuan
+        })
+      });
+
+      const text = await response.text();
+
+      if (
+        text.includes("Cookie check") || 
+        text.includes("Action required to load your app") || 
+        text.includes("redirectToReturnUrl") || 
+        text.trim().startsWith("<!doctype html>") || 
+        text.trim().startsWith("<!DOCTYPE html>")
+      ) {
+        throw new Error("COOKIE_CHECK_BLOCKED: Browser Anda memblokir cookie keamanan pihak ketiga. Silakan buka aplikasi di tab baru.");
+      }
+
+      if (!response.ok) {
+        let errorMessage = `API error ${response.status}: ${text.slice(0, 200)}`;
+        try {
+          if (text.trim().startsWith("{")) {
+            const errorJson = JSON.parse(text);
+            if (errorJson.error) errorMessage = errorJson.error;
+          }
+        } catch (e) {
+          console.error("Failed parsing error json:", e);
+        }
+        throw new Error(errorMessage);
+      }
+
+      const resData = JSON.parse(text);
+      if (resData.status === "error" || !resData.lkpdContent) {
+        throw new Error(resData.error || "Gagal memperoleh respon LKPD dari Gemini.");
+      }
+
+      const lkpdContent = resData.lkpdContent;
+
+      const lkpdTitle = `LKPD: ${selectedModule.params?.mataPelajaran || selectedModule.matpel || "Pelajaran"} - ${selectedModule.params?.babTema || selectedModule.title || selectedModule.judul || "Bab"}`;
+
+      const lkpdPlan: SavedLessonPlan = {
+        id: `lkpd-${crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)}`,
+        type: 'lkpd',
+        typeDoc: 'lkpd',
+        title: lkpdTitle,
+        judul: lkpdTitle,
+        matpel: selectedModule.params?.mataPelajaran || selectedModule.matpel || "",
+        kelas: selectedModule.params?.kelas || selectedModule.kelas || "",
+        fase: selectedModule.params?.fase || selectedModule.fase || "",
+        jenjang: selectedModule.params?.jenjang || selectedModule.jenjang || "",
+        tanggal: new Date().toISOString(),
+        content: lkpdContent,
+        params: selectedModule.params,
+        markdownContent: selectedModule.markdownContent,
+        lkpdContent: lkpdContent,
+        createdAt: new Date().toISOString()
+      };
+
+      // Also update selected module with lkpdContent
+      const updatedModule: SavedLessonPlan = {
+        ...selectedModule,
+        lkpdContent: lkpdContent
+      };
+
+      setActivePlan(lkpdPlan);
+
+      const updatedHistory = [lkpdPlan, ...history.map(h => h.id === selectedModule.id ? updatedModule : h)];
+      setHistory(updatedHistory);
+      saveToLocalStorage(updatedHistory);
+
+      const finishTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+      setNotifications(prev => [
+        {
+          id: `success-lkpd-${Date.now()}`,
+          type: "success",
+          message: `✅ LKPD AI (${selectedPertemuan}) berhasil digenerate dan tersimpan ke Riwayat!`,
+          time: finishTime
+        },
+        ...prev
+      ]);
+    } catch (error: any) {
+      console.error("Error generating LKPD:", error);
+      let errMsg = error.message || "Terjadi kesalahan saat membuat LKPD AI.";
+      setApiError(errMsg);
+      addNotification("error", errMsg);
+    } finally {
+      setIsGeneratingLKPD(false);
+    }
+  };
+
   // Select an item from local history
   const handleSelectPlan = (plan: SavedLessonPlan) => {
     setActivePlan(plan);
     setApiError(null);
-    setActiveCenterTab("preview");
+
+    // Auto-switch preview tab depending on document type
+    if (plan.type === 'lkpd') {
+      setActiveCenterTab("lkpd");
+    } else {
+      setActiveCenterTab("preview");
+    }
+    setMobileTab("preview");
 
     const timeNow = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    const docTypeName = plan.type === 'lkpd' ? 'LKPD' : 'Modul Ajar';
+    const docTitle = plan.params?.mataPelajaran
+      ? `${plan.params.mataPelajaran} - ${plan.params.babTema}`
+      : plan.title || plan.judul || "Dokumen";
+
     setNotifications(prev => [
       {
         id: Date.now(),
         type: "info",
-        message: `Membuka draf: ${plan.title}`,
+        message: `Membuka draf ${docTypeName}: ${docTitle}`,
         time: timeNow
       },
       ...prev
@@ -309,11 +526,12 @@ export default function App() {
     }
 
     const timeNow = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    const docTypeName = planToDelete?.type === 'lkpd' ? 'LKPD' : 'Modul Ajar';
     setNotifications(prev => [
       {
         id: Date.now(),
         type: "info",
-        message: `Draf dihapus: ${planToDelete?.title || "Modul Ajar"}`,
+        message: `Draf ${docTypeName} dihapus: ${planToDelete?.title || planToDelete?.judul || "Dokumen"}`,
         time: timeNow
       },
       ...prev
@@ -326,26 +544,33 @@ export default function App() {
     setHistory(updatedHistory);
     setActivePlan(updatedPlan);
     saveToLocalStorage(updatedHistory);
+    const docTypeName = updatedPlan.type === 'lkpd' ? 'LKPD' : 'Modul Ajar';
+    addNotification("success", `${docTypeName} berhasil disimpan ke Riwayat Tersimpan.`);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200 flex flex-col">
+    <div className="min-h-screen w-full overflow-y-auto lg:h-screen lg:max-h-screen lg:w-screen lg:overflow-hidden flex flex-col bg-slate-100 text-slate-900 dark:bg-[#0b1021] dark:text-slate-100 transition-colors duration-200">
       
       {/* Top Application Header */}
-      <header id="app-header" className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 h-auto py-4 px-4 sm:px-6 md:px-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-white shrink-0 shadow-md fixed top-0 left-0 right-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="border border-white/20 bg-white/10 p-2 rounded-lg shrink-0 flex items-center justify-center">
-            <Files className="h-7 w-7 sm:h-8 sm:w-8 text-white stroke-[1.5]" />
+      <header id="app-header" className="flex-none py-2.5 px-4 sm:px-6 md:px-8 bg-indigo-900 text-white border-b border-indigo-800 dark:bg-[#0f172a] dark:text-white dark:border-slate-800 flex items-center justify-between gap-4 shadow-md z-50">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <div className="border border-white/20 bg-white/10 p-1.5 rounded-lg shrink-0 flex items-center justify-center">
+            <Files className="h-5 w-5 text-white stroke-[1.5]" />
           </div>
-          <div className="text-left">
-            <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-extrabold tracking-tight text-white leading-tight">Asisten Penyusunan Perencanaan Pembelajaran Madrasah</h1>
-            <p className="text-[10px] sm:text-xs mt-1 leading-normal font-light tracking-wide text-amber-50/90 dark:text-blue-200/80">Cerdas dengan Deep Learning, Hangat dengan Kurikulum Berbasis Cinta (KBC)</p>
+          <div className="flex flex-col justify-center text-left min-w-0">
+            <h1 className="text-base font-bold tracking-tight text-white leading-tight truncate flex items-center gap-2">
+              <span className="truncate">Asisten Penyusunan Modul Ajar Madrasah</span>
+              <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-300/20 text-amber-100 border border-amber-200/30 dark:bg-sky-400/20 dark:text-sky-200 dark:border-sky-400/30 shadow-xs">
+                v1.2.0
+              </span>
+            </h1>
+            <p className="text-xs leading-tight font-normal text-amber-50/90 dark:text-blue-200/80 truncate mt-0.5">Cerdas dengan Deep Learning, Hangat dengan Kurikulum Berbasis Cinta (KBC)</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 self-end md:self-auto text-xs font-medium">
+        <div className="flex items-center gap-2.5 shrink-0 text-xs font-medium">
           <button
             onClick={toggleTheme}
-            className="bg-white/15 hover:bg-white/25 border border-white/20 text-white p-2 rounded-full backdrop-blur-sm transition-all duration-200 flex items-center justify-center cursor-pointer"
+            className="bg-white/15 hover:bg-white/25 border border-white/20 text-white p-1.5 rounded-full backdrop-blur-sm transition-all duration-200 flex items-center justify-center cursor-pointer"
             title={theme === "dark" ? "Aktifkan Mode Terang" : "Aktifkan Mode Gelap"}
             aria-label="Toggle theme"
           >
@@ -359,7 +584,7 @@ export default function App() {
             href="https://wa.me/082131752220"
             target="_blank"
             rel="noopener noreferrer"
-            className="bg-white/15 hover:bg-white/25 border border-white/20 text-white text-sm font-medium px-4 py-1.5 rounded-full backdrop-blur-sm transition-all duration-200 inline-flex items-center justify-center gap-1.5 cursor-pointer"
+            className="bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-medium px-3 py-1 rounded-full backdrop-blur-sm transition-all duration-200 inline-flex items-center justify-center gap-1.5 cursor-pointer"
             title="Hubungi Bantuan di WhatsApp"
           >
             Bantuan
@@ -367,8 +592,51 @@ export default function App() {
         </div>
       </header>
 
+      {/* Mobile Navigation Tab Bar */}
+      <div id="mobile-tab-bar" className="flex lg:hidden items-center justify-around bg-white/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 p-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 shadow-xs z-40 sticky top-0 backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => setMobileTab("form")}
+          className={`flex-1 py-2.5 px-3 min-h-[44px] rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            mobileTab === "form"
+              ? "bg-blue-600 text-white font-semibold shadow-xs"
+              : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>Formulir</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab("preview")}
+          className={`flex-1 py-2.5 px-3 min-h-[44px] rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            mobileTab === "preview"
+              ? "bg-blue-600 text-white font-semibold shadow-xs"
+              : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>Preview</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab("notifications")}
+          className={`flex-1 py-2.5 px-3 min-h-[44px] rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer relative ${
+            mobileTab === "notifications"
+              ? "bg-blue-600 text-white font-semibold shadow-xs"
+              : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+          }`}
+        >
+          <Bell className="w-4 h-4" />
+          <span>Notifikasi</span>
+          {notifications.length > 0 && (
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          )}
+        </button>
+      </div>
+
       {/* Main Content Area */}
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 pt-[180px] md:pt-[110px] pb-4 flex flex-col gap-6">
+      <main className="flex-1 min-h-0 lg:h-full w-full max-w-[1600px] mx-auto flex flex-col overflow-visible lg:overflow-hidden">
         
         {/* Error notification */}
         {apiError && (
@@ -382,7 +650,7 @@ export default function App() {
 
             if (isCookieOrFetchError) {
               return (
-                <div id="error-bar" className="mb-2 p-5 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row items-start gap-4 text-sm text-slate-800 animate-fade-in shadow-sm">
+                <div id="error-bar" className="m-2 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row items-start gap-4 text-sm text-slate-800 animate-fade-in shadow-sm shrink-0">
                   <div className="bg-amber-100 p-2.5 rounded-xl text-amber-600 shrink-0">
                     <AlertCircle className="w-6 h-6" />
                   </div>
@@ -413,7 +681,7 @@ export default function App() {
             }
 
             return (
-              <div id="error-bar" className="mb-2 p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3 text-sm text-rose-800 animate-fade-in shadow-sm">
+              <div id="error-bar" className="m-2 p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3 text-sm text-rose-800 animate-fade-in shadow-sm shrink-0">
                 <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
                 <div className="space-y-1 text-left">
                   <h4 className="font-bold">Gagal Menyusun Rencana Pembelajaran</h4>
@@ -425,55 +693,98 @@ export default function App() {
         )}
 
         {/* 3-Column Bento Grid Layout for Ultimate Desktop Productivity */}
-        <div className="grid grid-cols-1 gap-6 lg:grid lg:grid-cols-12 lg:gap-8 xl:grid xl:grid-cols-12 xl:gap-6 items-start">
+        <div className="flex flex-col gap-4 p-3 w-full lg:grid lg:grid-cols-12 lg:gap-4 lg:p-4 lg:flex-1 lg:min-h-0 lg:h-full">
           
           {/* Column 1 (Left): Form & Quick Guide */}
-          <div className="lg:col-span-5 xl:col-span-4 space-y-6 xl:h-[calc(100vh-7rem)] xl:flex xl:flex-col">
-            <LessonPlanForm onSubmit={handleGeneratePlan} isGenerating={isGenerating} setNotifications={setNotifications} />
+          <div className={`col-span-12 lg:col-span-4 xl:col-span-4 h-auto lg:h-full min-h-0 ${mobileTab === "form" ? "flex" : "hidden lg:flex"} flex-col overflow-visible lg:overflow-hidden`}>
+            <LessonPlanForm
+              onSubmit={handleGeneratePlan}
+              isGenerating={isGenerating}
+              activePlan={activePlan}
+              history={history}
+              onSelectPlan={handleSelectPlan}
+              onGenerateLKPD={handleGenerateLKPD}
+              leftTab={leftTab}
+              setLeftTab={setLeftTab}
+              onSelectCenterTab={setActiveCenterTab}
+              setNotifications={setNotifications}
+            />
           </div>
 
-          {/* Column 2 (Right): Active Preview panel, indicators, and history */}
-          <div className="lg:col-span-7 xl:col-span-5 flex flex-col lg:sticky lg:top-6 lg:h-[calc(100vh-6rem)] h-auto overflow-hidden xl:h-[calc(100vh-7rem)] xl:flex xl:flex-col">
+          {/* Column 2 (Middle): Active Preview panel & history */}
+          <div className={`col-span-12 lg:col-span-5 xl:col-span-5 h-auto lg:h-full min-h-0 ${mobileTab === "preview" ? "flex" : "hidden lg:flex"} flex-col overflow-visible lg:overflow-hidden`}>
             {/* Tab Contents */}
-            {activeCenterTab === "preview" ? (
-              <LessonPlanPreview
-                plan={activePlan}
-                onUpdatePlan={handleUpdatePlan}
-                isGenerating={isGenerating}
-              />
-            ) : (
-              <HistoryList
-                history={history}
-                onSelect={handleSelectPlan}
-                onDelete={handleDeletePlan}
-                selectedId={activePlan ? activePlan.id : null}
-              />
-            )}
+            <div className="flex-1 min-h-0 h-auto lg:h-full overflow-visible lg:overflow-hidden flex flex-col">
+              {activeCenterTab === "preview" && (
+                <LessonPlanPreview
+                  plan={activePlan}
+                  onUpdatePlan={handleUpdatePlan}
+                  isGenerating={isGenerating}
+                  addNotification={addNotification}
+                />
+              )}
 
-            {/* Tab Switcher */}
-            <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700/40 rounded-lg mt-4 shrink-0">
+              {activeCenterTab === "lkpd" && (
+                <LkpdPreview
+                  plan={activePlan}
+                  isGenerating={isGeneratingLKPD}
+                  onUpdatePlan={handleUpdatePlan}
+                  addNotification={addNotification}
+                  onSwitchToLkpdTab={() => {
+                    setLeftTab("lkpd");
+                    setMobileTab("form");
+                  }}
+                />
+              )}
+
+              {activeCenterTab === "riwayat" && (
+                <HistoryList
+                  history={history}
+                  onSelect={handleSelectPlan}
+                  onDelete={handleDeletePlan}
+                  selectedId={activePlan ? activePlan.id : null}
+                />
+              )}
+            </div>
+
+            {/* Tab Switcher - Compact bottom tab bar with 3 tabs */}
+            <div className="sticky bottom-2 z-10 flex gap-1.5 p-1.5 bg-slate-100 dark:bg-[#0b1021]/60 border border-slate-200 dark:border-slate-800/80 rounded-xl mt-2 flex-none shadow-xs backdrop-blur-md lg:static lg:shadow-none lg:backdrop-blur-none">
               <button
                 type="button"
+                id="tab-center-preview"
                 onClick={() => setActiveCenterTab("preview")}
-                className={`flex-1 transition-all duration-200 text-xs py-1.5 px-3 rounded-md text-center cursor-pointer ${
+                className={`flex-1 py-1.5 px-2 h-8 text-xs font-semibold rounded-lg transition-all text-center cursor-pointer flex items-center justify-center gap-1 ${
                   activeCenterTab === "preview"
-                    ? "bg-blue-600 text-white font-medium shadow-xs"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
+                    ? "bg-blue-600 text-white shadow-xs font-bold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
                 }`}
               >
-                Preview Modul Ajar
+                <span className="truncate">Preview Modul Ajar</span>
               </button>
               <button
                 type="button"
-                onClick={() => setActiveCenterTab("riwayat")}
-                className={`flex-1 transition-all duration-200 text-xs py-1.5 px-3 rounded-md text-center cursor-pointer flex items-center justify-center gap-1.5 ${
-                  activeCenterTab === "riwayat"
-                    ? "bg-blue-600 text-white font-medium shadow-xs"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
+                id="tab-center-lkpd"
+                onClick={() => setActiveCenterTab("lkpd")}
+                className={`flex-1 py-1.5 px-2 h-8 text-xs font-semibold rounded-lg transition-all text-center cursor-pointer flex items-center justify-center gap-1 ${
+                  activeCenterTab === "lkpd"
+                    ? "bg-amber-600 text-white shadow-xs font-bold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
                 }`}
               >
-                <span>Riwayat Tersimpan</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                <span className="truncate">Preview Lembar Kerja Peserta Didik</span>
+              </button>
+              <button
+                type="button"
+                id="tab-center-riwayat"
+                onClick={() => setActiveCenterTab("riwayat")}
+                className={`flex-1 py-1.5 px-2 h-8 text-xs font-semibold rounded-lg transition-all text-center cursor-pointer flex items-center justify-center gap-1 ${
+                  activeCenterTab === "riwayat"
+                    ? "bg-blue-600 text-white shadow-xs font-bold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+                }`}
+              >
+                <span className="truncate">Riwayat</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold leading-none shrink-0 ${
                   activeCenterTab === "riwayat"
                     ? "bg-white/20 text-white"
                     : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
@@ -484,11 +795,11 @@ export default function App() {
             </div>
           </div>
 
-          {/* Kolom Kanan Baru (Tempat Status & Edukasi) */}
-          <div className="xl:col-span-3 lg:col-span-12 w-full xl:h-[calc(100vh-7rem)] xl:overflow-y-auto flex flex-col gap-4">
+          {/* Column 3 (Right): Status & Pusat Notifikasi */}
+          <div className={`col-span-12 lg:col-span-3 xl:col-span-3 h-auto lg:h-full min-h-0 ${mobileTab === "notifications" ? "flex" : "hidden lg:flex"} flex-col gap-3 overflow-visible lg:overflow-hidden`}>
             {/* Indicator panels from Vibrant Palette */}
-            <div className="flex flex-col gap-3 w-full text-left">
-              <div className="bg-white dark:bg-slate-800 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
+            <div className="flex-none flex flex-col gap-2.5 w-full text-left">
+              <div className="bg-white dark:bg-[#131b2e] py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-800/70 flex items-center gap-3 shadow-xs dark:shadow-none transition-colors duration-200">
                 <div className="bg-rose-100 dark:bg-rose-950/40 p-1.5 rounded-full text-rose-500 shrink-0">
                   <Heart className="w-4 h-4 fill-rose-500" />
                 </div>
@@ -498,7 +809,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
+              <div className="bg-white dark:bg-[#131b2e] py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-800/70 flex items-center gap-3 shadow-xs dark:shadow-none transition-colors duration-200">
                 <div className="bg-amber-100 dark:bg-amber-950/40 p-1.5 rounded-full text-amber-500 shrink-0">
                   <Compass className="w-4 h-4" />
                 </div>
@@ -508,7 +819,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs transition-colors duration-200">
+              <div className="bg-white dark:bg-[#131b2e] py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-800/70 flex items-center gap-3 shadow-xs dark:shadow-none transition-colors duration-200">
                 <div className="bg-sky-100 dark:bg-sky-950/40 p-1.5 rounded-full text-sky-500 shrink-0">
                   <FileText className="w-4 h-4" />
                 </div>
@@ -522,25 +833,37 @@ export default function App() {
             </div>
 
             {/* Pusat Notifikasi & Aktivitas */}
-            <div className="w-full flex-1 min-h-[250px] bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700/50 shadow-sm dark:shadow-none rounded-xl p-4 flex flex-col">
-              <div className="flex items-center justify-between w-full">
+            <div className="w-full flex-1 min-h-0 h-auto lg:h-full bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800/70 shadow-sm dark:shadow-none rounded-2xl p-4 flex flex-col overflow-hidden transition-colors duration-200">
+              <div className="flex-none flex items-center justify-between w-full">
                 <div className="flex items-center gap-2">
-                  <Bell className="w-4 h-4 text-sky-500 dark:text-sky-400" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    Pusat Notifikasi
-                  </span>
+                  <div className="relative flex items-center justify-center">
+                    <Bell className="w-4 h-4 text-sky-500 dark:text-sky-400" />
+                    {notifications.length > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-sky-500 rounded-full animate-ping" />
+                    )}
+                  </div>
+                  <h3 className="text-base font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <span>Pusat Notifikasi</span>
+                    {notifications.length > 0 && (
+                      <span className="text-[10px] bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300 font-bold px-1.5 py-0.5 rounded-full leading-none">
+                        {notifications.length}
+                      </span>
+                    )}
+                  </h3>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setNotifications([])}
-                  className="p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-400 transition-colors rounded hover:bg-slate-100 dark:hover:bg-slate-800/60"
-                  title="Bersihkan semua notifikasi"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {notifications.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setNotifications([])}
+                    className="p-1.5 flex items-center justify-center text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/60 cursor-pointer"
+                    title="Bersihkan semua notifikasi"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-              <div className="border-b border-slate-100 dark:border-slate-800 my-3"></div>
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              <div className="flex-none border-b border-slate-100 dark:border-slate-800 my-2.5"></div>
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                 {notifications.map((item) => {
                   let styleClasses = "";
                   let IconComponent = Info;
@@ -562,11 +885,11 @@ export default function App() {
                   return (
                     <div
                       key={item.id}
-                      className={`p-2.5 rounded-lg text-xs leading-relaxed flex items-start gap-2.5 transition-all duration-200 ${styleClasses}`}
+                      className={`p-2.5 rounded-lg text-xs leading-relaxed flex items-start gap-2.5 transition-all duration-200 animate-notif ${styleClasses}`}
                     >
                       <IconComponent className={`w-4 h-4 shrink-0 mt-0.5 ${item.type === "loading" ? "animate-spin" : ""}`} />
-                      <span className="flex-1 text-left">{item.message}</span>
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-auto whitespace-nowrap pt-0.5">{item.time}</span>
+                      <span className="flex-1 text-left font-medium">{item.message}</span>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-auto whitespace-nowrap pt-0.5 font-mono">{item.time}</span>
                     </div>
                   );
                 })}
@@ -579,14 +902,12 @@ export default function App() {
 
         </div>
 
-        {/* Footer */}
-        <footer className="mt-4 mb-2 py-2 w-full text-center">
-          <div className="text-[11px] text-slate-400 dark:text-slate-500">
-            © 2026 Asisten Penyusunan Perencanaan Pembelajaran Madrasah v1.2.0 (Release)
-          </div>
-        </footer>
-
       </main>
+
+      {/* Footer */}
+      <footer className="flex-none text-xs py-1.5 px-4 sm:px-6 md:px-8 text-center text-slate-500 dark:text-slate-400 w-full">
+        © 2026 Asisten Penyusunan Modul Ajar Madrasah
+      </footer>
     </div>
   );
 }
